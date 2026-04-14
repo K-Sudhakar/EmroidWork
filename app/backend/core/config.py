@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     data_path: Path = Path("/data")
     max_file_size: int = Field(default=10 * 1024 * 1024, ge=1)
-    allowed_origins: list[str] = Field(default_factory=lambda: ["*"])
+    allowed_origins: str = "*"
 
     inkscape_path: str = "inkscape"
     inkstitch_ext_path: Path | None = Path("/root/.config/inkscape/extensions")
@@ -25,12 +25,13 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    @field_validator("allowed_origins", mode="before")
-    @classmethod
-    def parse_allowed_origins(cls, value: str | list[str]) -> list[str]:
-        if isinstance(value, str):
-            return [origin.strip() for origin in value.split(",") if origin.strip()]
-        return value
+    @property
+    def cors_allowed_origins(self) -> list[str]:
+        return [
+            origin.strip()
+            for origin in self.allowed_origins.split(",")
+            if origin.strip()
+        ]
 
     @property
     def input_dir(self) -> Path:
