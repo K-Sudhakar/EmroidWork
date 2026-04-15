@@ -185,21 +185,25 @@ class InkstitchAdapter:
 
     def _resolve_inkstitch_binary(self) -> Path | None:
         if self.inkstitch_bin_path:
-            return self.inkstitch_bin_path if self.inkstitch_bin_path.exists() else None
+            return self.inkstitch_bin_path if self.inkstitch_bin_path.is_file() else None
 
         if not self.extension_path or not self.extension_path.exists():
             return None
 
         candidates = [
-            self.extension_path / "inkstitch",
-            self.extension_path / "inkstitch.py",
+            self.extension_path / "inkstitch" / "bin" / "inkstitch",
+            self.extension_path / "inkstitch" / "inkstitch.py",
             self.extension_path / "bin" / "inkstitch",
+            self.extension_path / "inkstitch.py",
+            self.extension_path / "inkstitch",
         ]
         for candidate in candidates:
-            if candidate.exists():
+            if candidate.is_file():
                 return candidate
 
-        matches = sorted(self.extension_path.rglob("inkstitch"))
+        matches = sorted(
+            path for path in self.extension_path.rglob("inkstitch") if path.is_file()
+        )
         return matches[0] if matches else None
 
     @staticmethod

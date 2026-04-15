@@ -9,7 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DATA_PATH=/data \
     INKSCAPE_PATH=inkscape \
     INKSTITCH_EXT_PATH=/root/.config/inkscape/extensions \
-    INKSTITCH_BIN_PATH=/root/.config/inkscape/extensions/inkstitch \
+    INKSTITCH_BIN_PATH=/root/.config/inkscape/extensions/inkstitch/bin/inkstitch \
     GDK_BACKEND=x11
 
 WORKDIR /service
@@ -31,7 +31,7 @@ RUN mkdir -p "${INKSTITCH_EXT_PATH}" \
     && tar -xJf /tmp/inkstitch.tar.xz -C "${INKSTITCH_EXT_PATH}" \
     && rm /tmp/inkstitch.tar.xz \
     && inkscape --version \
-    && test -e "${INKSTITCH_BIN_PATH}" \
+    && test -f "${INKSTITCH_BIN_PATH}" \
     && chmod +x "${INKSTITCH_BIN_PATH}" \
     && test -x "${INKSTITCH_BIN_PATH}"
 

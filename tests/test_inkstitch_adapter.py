@@ -50,3 +50,19 @@ def test_dependency_status_rejects_non_executable_inkstitch_binary(tmp_path, mon
     assert inkscape_ok is True
     assert extension_ok is False
     assert detail == "Ink/Stitch extension binary is not executable."
+
+
+def test_resolve_inkstitch_binary_from_extracted_extension_directory(tmp_path):
+    extension_root = tmp_path / "extensions"
+    binary = extension_root / "inkstitch" / "bin" / "inkstitch"
+    binary.parent.mkdir(parents=True)
+    binary.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    adapter = InkstitchAdapter(
+        inkscape_path="python",
+        extension_path=extension_root,
+        inkstitch_bin_path=None,
+        timeout_seconds=1,
+    )
+
+    assert adapter._resolve_inkstitch_binary() == binary

@@ -14,7 +14,7 @@ services:
       ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-*}"
       INKSCAPE_PATH: "${INKSCAPE_PATH:-inkscape}"
       INKSTITCH_EXT_PATH: "${INKSTITCH_EXT_PATH:-/root/.config/inkscape/extensions}"
-      INKSTITCH_BIN_PATH: "${INKSTITCH_BIN_PATH:-/root/.config/inkscape/extensions/inkstitch}"
+      INKSTITCH_BIN_PATH: "${INKSTITCH_BIN_PATH:-/root/.config/inkscape/extensions/inkstitch/bin/inkstitch}"
       INKSTITCH_TIMEOUT_SECONDS: "${INKSTITCH_TIMEOUT_SECONDS:-120}"
     ports:
       - "8000:8000"
