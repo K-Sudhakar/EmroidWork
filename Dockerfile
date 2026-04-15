@@ -31,7 +31,9 @@ RUN mkdir -p "${INKSTITCH_EXT_PATH}" \
     && tar -xJf /tmp/inkstitch.tar.xz -C "${INKSTITCH_EXT_PATH}" \
     && rm /tmp/inkstitch.tar.xz \
     && inkscape --version \
-    && test -e "${INKSTITCH_BIN_PATH}"
+    && test -e "${INKSTITCH_BIN_PATH}" \
+    && chmod +x "${INKSTITCH_BIN_PATH}" \
+    && test -x "${INKSTITCH_BIN_PATH}"
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

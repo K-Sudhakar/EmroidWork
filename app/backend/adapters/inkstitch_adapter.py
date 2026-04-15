@@ -79,10 +79,16 @@ class InkstitchAdapter:
                 code="inkstitch_extension_missing",
             )
 
-        if self._resolve_inkstitch_binary() is None:
+        binary = self._resolve_inkstitch_binary()
+        if binary is None:
             raise DependencyAppError(
                 "Ink/Stitch extension binary was not found. Check INKSTITCH_BIN_PATH or extension installation.",
                 code="inkstitch_binary_missing",
+            )
+        if not os.access(binary, os.X_OK):
+            raise DependencyAppError(
+                "Ink/Stitch extension binary is not executable. Check file permissions.",
+                code="inkstitch_binary_not_executable",
             )
 
     def dependency_status(self) -> tuple[bool, bool, str | None]:
@@ -102,7 +108,12 @@ class InkstitchAdapter:
         if self.extension_path and not self.extension_path.exists():
             return True, False, "Ink/Stitch extension path does not exist."
 
-        return True, self._resolve_inkstitch_binary() is not None, None
+        binary = self._resolve_inkstitch_binary()
+        if binary is None:
+            return True, False, "Ink/Stitch extension binary was not found."
+        if not os.access(binary, os.X_OK):
+            return True, False, "Ink/Stitch extension binary is not executable."
+        return True, True, None
 
     def convert(
         self,
@@ -118,6 +129,8 @@ class InkstitchAdapter:
         binary = self._resolve_inkstitch_binary()
         if binary is None:
             raise InkstitchExecutionError("Ink/Stitch extension binary was not found.")
+        if not os.access(binary, os.X_OK):
+            raise InkstitchExecutionError("Ink/Stitch extension binary is not executable.")
 
         temp_zip_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.parent.mkdir(parents=True, exist_ok=True)
