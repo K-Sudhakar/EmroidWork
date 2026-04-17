@@ -23,6 +23,10 @@ RUN apt-get update \
         libgtk-3-0 \
         libnss3 \
         libsm6 \
+        libwayland-client0 \
+        libwayland-cursor0 \
+        libwayland-egl1 \
+        libwayland-server0 \
         libxext6 \
         libxrender1 \
         libxtst6 \
