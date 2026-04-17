@@ -25,6 +25,11 @@ class DummyWorker:
         self.enqueued.append(job_id)
 
 
+class DummyVectorizer:
+    def dependency_status(self):
+        return True, True, None
+
+
 def build_client(tmp_path: Path) -> TestClient:
     storage = LocalFileStorage(
         input_dir=tmp_path / "input",
@@ -39,6 +44,7 @@ def build_client(tmp_path: Path) -> TestClient:
     app_state.storage = storage
     app_state.repository = repository
     app_state.converter = DummyConverter()
+    app_state.vectorizer = DummyVectorizer()
     app_state.worker = None
     app_state.job_service = JobService(
         repository=repository,
@@ -53,6 +59,8 @@ def test_health(tmp_path):
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["dependencies"]["inkscape"] is True
+    assert response.json()["dependencies"]["imagemagick"] is True
+    assert response.json()["dependencies"]["potrace"] is True
 
 
 def test_create_svg_job(tmp_path):
@@ -71,7 +79,27 @@ def test_create_svg_job(tmp_path):
     assert response.status_code == 202
     payload = response.json()
     assert payload["status"] == "RECEIVED"
+    assert payload["input_format"] == "svg"
     assert payload["output_format"] == "dst"
+
+
+def test_create_png_job(tmp_path):
+    client = build_client(tmp_path)
+    response = client.post(
+        "/jobs",
+        files={
+            "file": (
+                "logo.png",
+                b"\x89PNG\r\n\x1a\nminimal",
+                "image/png",
+            )
+        },
+        data={"output_format": "dst"},
+    )
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["filename"] == "logo.png"
+    assert payload["input_format"] == "png"
 
 
 def test_reject_invalid_extension(tmp_path):

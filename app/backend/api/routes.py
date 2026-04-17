@@ -30,20 +30,32 @@ def get_converter():
     return app_state.converter
 
 
+def get_vectorizer():
+    from app.backend.main import app_state
+
+    if app_state.vectorizer is None:
+        raise RuntimeError("Application services are not initialized.")
+    return app_state.vectorizer
+
+
 @router.get("/health", response_model=HealthResponse)
 def health(
     settings: Settings = Depends(get_settings),
     converter=Depends(get_converter),
+    vectorizer=Depends(get_vectorizer),
 ) -> HealthResponse:
     inkscape_ok, extension_ok, detail = converter.dependency_status()
-    status = "ok" if inkscape_ok else "degraded"
+    imagemagick_ok, potrace_ok, vectorizer_detail = vectorizer.dependency_status()
+    status = "ok" if all([inkscape_ok, extension_ok, imagemagick_ok, potrace_ok]) else "degraded"
     return HealthResponse(
         status=status,
         app_name=settings.app_name,
         dependencies=HealthDependencyStatus(
             inkscape=inkscape_ok,
             inkstitch_extension=extension_ok,
-            detail=detail,
+            imagemagick=imagemagick_ok,
+            potrace=potrace_ok,
+            detail=detail or vectorizer_detail,
         ),
     )
 

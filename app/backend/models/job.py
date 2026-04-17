@@ -18,13 +18,27 @@ class OutputFormat(StrEnum):
     PES = "pes"
 
 
+class InputFormat(StrEnum):
+    SVG = "svg"
+    PNG = "png"
+    JPG = "jpg"
+    JPEG = "jpeg"
+
+
 SUPPORTED_OUTPUT_FORMATS = {OutputFormat.DST}
+SUPPORTED_INPUT_FORMATS = {
+    InputFormat.SVG,
+    InputFormat.PNG,
+    InputFormat.JPG,
+    InputFormat.JPEG,
+}
 
 
 class Job(BaseModel):
     job_id: str
     filename: str
     input_path: Path
+    input_format: InputFormat = InputFormat.SVG
     output_path: Path | None = None
     output_format: OutputFormat
     status: JobStatus = JobStatus.RECEIVED

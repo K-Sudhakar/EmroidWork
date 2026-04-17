@@ -16,6 +16,9 @@ services:
       INKSTITCH_EXT_PATH: "${INKSTITCH_EXT_PATH:-/root/.config/inkscape/extensions}"
       INKSTITCH_BIN_PATH: "${INKSTITCH_BIN_PATH:-/root/.config/inkscape/extensions/inkstitch/bin/inkstitch}"
       INKSTITCH_TIMEOUT_SECONDS: "${INKSTITCH_TIMEOUT_SECONDS:-120}"
+      IMAGEMAGICK_PATH: "${IMAGEMAGICK_PATH:-convert}"
+      POTRACE_PATH: "${POTRACE_PATH:-potrace}"
+      RASTER_VECTORIZE_TIMEOUT_SECONDS: "${RASTER_VECTORIZE_TIMEOUT_SECONDS:-120}"
     ports:
       - "8000:8000"
     volumes:

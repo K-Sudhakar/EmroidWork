@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.backend.adapters.inkstitch_adapter import InkstitchAdapter
+from app.backend.adapters.raster_vectorizer import RasterVectorizer
 from app.backend.api.routes import router
 from app.backend.core.config import get_settings
 from app.backend.core.errors import AppError
@@ -23,6 +24,7 @@ class AppState:
     storage: LocalFileStorage | None = None
     repository: JsonJobRepository | None = None
     converter: InkstitchAdapter | None = None
+    vectorizer: RasterVectorizer | None = None
     worker: JobWorker | None = None
     job_service: JobService | None = None
 
@@ -48,14 +50,25 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         inkstitch_bin_path=settings.inkstitch_bin_path,
         timeout_seconds=settings.inkstitch_timeout_seconds,
     )
+    vectorizer = RasterVectorizer(
+        imagemagick_path=settings.imagemagick_path,
+        potrace_path=settings.potrace_path,
+        timeout_seconds=settings.raster_vectorize_timeout_seconds,
+    )
     storage.ensure_directories()
     repository.ensure_directories()
-    worker = JobWorker(repository=repository, storage=storage, converter=converter)
+    worker = JobWorker(
+        repository=repository,
+        storage=storage,
+        converter=converter,
+        vectorizer=vectorizer,
+    )
     job_service = JobService(repository=repository, storage=storage, worker=worker)
 
     app_state.storage = storage
     app_state.repository = repository
     app_state.converter = converter
+    app_state.vectorizer = vectorizer
     app_state.worker = worker
     app_state.job_service = job_service
 

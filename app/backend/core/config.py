@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     inkstitch_ext_path: Path | None = Path("/root/.config/inkscape/extensions")
     inkstitch_bin_path: Path | None = None
     inkstitch_timeout_seconds: int = Field(default=120, ge=1)
+    imagemagick_path: str = "convert"
+    potrace_path: str = "potrace"
+    raster_vectorize_timeout_seconds: int = Field(default=120, ge=1)
 
     model_config = SettingsConfigDict(
         env_file=".env",

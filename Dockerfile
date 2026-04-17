@@ -18,6 +18,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
+        imagemagick \
         inkscape \
         libdrm2 \
         libgtk-3-0 \
@@ -30,6 +31,7 @@ RUN apt-get update \
         libxext6 \
         libxrender1 \
         libxtst6 \
+        potrace \
         unzip \
         xz-utils \
     && rm -rf /var/lib/apt/lists/*
@@ -42,6 +44,8 @@ RUN mkdir -p "${INKSTITCH_EXT_PATH}" \
     && tar -xJf /tmp/inkstitch.tar.xz -C "${INKSTITCH_EXT_PATH}" \
     && rm /tmp/inkstitch.tar.xz \
     && inkscape --version \
+    && convert -version \
+    && potrace --version \
     && test -f "${INKSTITCH_BIN_PATH}" \
     && chmod +x "${INKSTITCH_BIN_PATH}" \
     && test -x "${INKSTITCH_BIN_PATH}" \

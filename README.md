@@ -1,6 +1,6 @@
 # Embroidery Processing Backend
 
-FastAPI backend for SVG-to-embroidery processing. The MVP accepts SVG uploads, creates asynchronous jobs, converts to DST through Ink/Stitch, stores files locally, and exposes job status plus download endpoints.
+FastAPI backend for embroidery processing. The MVP accepts SVG, PNG, JPG, and JPEG uploads, creates asynchronous jobs, converts raster images to SVG when needed, converts to DST through Ink/Stitch, stores files locally, and exposes job status plus download endpoints.
 
 Telegram and n8n are intentionally out of scope for this phase. All business logic lives in the backend.
 
@@ -45,9 +45,12 @@ INKSCAPE_PATH=inkscape
 INKSTITCH_EXT_PATH=/root/.config/inkscape/extensions
 INKSTITCH_BIN_PATH=/root/.config/inkscape/extensions/inkstitch/bin/inkstitch
 INKSTITCH_TIMEOUT_SECONDS=120
+IMAGEMAGICK_PATH=convert
+POTRACE_PATH=potrace
+RASTER_VECTORIZE_TIMEOUT_SECONDS=120
 ```
 
-The MVP supports `output_format=dst`. PES is represented in the model for future extension but is rejected until implemented.
+The MVP supports `output_format=dst`. PES is represented in the model for future extension but is rejected until implemented. Raster inputs are auto-traced for simple logo-style images; production embroidery quality is still best with clean SVG paths.
 
 ## Run With Docker
 
@@ -55,7 +58,7 @@ The MVP supports `output_format=dst`. PES is represented in the model for future
 docker compose up --build
 ```
 
-The image installs Inkscape with apt, downloads the pinned Ink/Stitch Linux release, extracts it into `/root/.config/inkscape/extensions`, runs `inkscape --version`, and verifies the Ink/Stitch binary path during build.
+The image installs Inkscape, ImageMagick, Potrace, and Ink/Stitch runtime libraries with apt. It downloads the pinned Ink/Stitch Linux release, extracts it into `/root/.config/inkscape/extensions`, runs dependency version checks, and verifies the Ink/Stitch binary path during build.
 
 To override the Ink/Stitch release source:
 
@@ -69,7 +72,7 @@ If your environment needs a different asset URL, add `INKSTITCH_DOWNLOAD_URL` as
 
 ## Run Locally
 
-Local conversion requires Inkscape and Ink/Stitch to be installed on the host. For API-only development and unit tests, Ink/Stitch is not required.
+Local conversion requires Inkscape, Ink/Stitch, ImageMagick, and Potrace to be installed on the host. For API-only development and unit tests, these system tools are not required.
 
 ```bash
 python -m venv .venv
@@ -97,6 +100,8 @@ Check Inkscape:
 
 ```bash
 inkscape --version
+convert -version
+potrace --version
 ```
 
 Check the Ink/Stitch extension placement in Docker:
@@ -134,6 +139,13 @@ Submit a job:
 
 ```bash
 curl -F "file=@sample.svg;type=image/svg+xml" -F "output_format=dst" http://localhost:8000/jobs
+```
+
+Submit a raster image job:
+
+```bash
+curl -F "file=@logo.png;type=image/png" -F "output_format=dst" http://localhost:8000/jobs
+curl -F "file=@logo.jpg;type=image/jpeg" -F "output_format=dst" http://localhost:8000/jobs
 ```
 
 Poll job status:

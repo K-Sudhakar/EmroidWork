@@ -30,11 +30,12 @@ class JobService:
             )
 
         job_id = uuid4().hex
-        filename, input_path = await self.storage.save_svg_upload(job_id, upload)
+        filename, input_path, input_format = await self.storage.save_upload(job_id, upload)
         job = Job(
             job_id=job_id,
             filename=filename,
             input_path=input_path,
+            input_format=input_format,
             output_format=output_format,
             status=JobStatus.RECEIVED,
         )

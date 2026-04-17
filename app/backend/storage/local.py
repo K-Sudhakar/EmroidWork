@@ -6,14 +6,23 @@ from xml.etree import ElementTree
 from starlette.datastructures import UploadFile
 
 from app.backend.core.errors import ValidationAppError
+from app.backend.models.job import InputFormat, SUPPORTED_INPUT_FORMATS
 
 _SAFE_FILENAME_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
-_SVG_CONTENT_TYPES = {
+_ALLOWED_CONTENT_TYPES = {
     "image/svg+xml",
     "application/svg+xml",
+    "image/png",
+    "image/jpeg",
     "text/xml",
     "application/xml",
     "application/octet-stream",
+}
+_EXTENSION_TO_FORMAT = {
+    ".svg": InputFormat.SVG,
+    ".png": InputFormat.PNG,
+    ".jpg": InputFormat.JPG,
+    ".jpeg": InputFormat.JPEG,
 }
 
 
@@ -48,11 +57,10 @@ class LocalFileStorage:
         for directory in (self.input_dir, self.output_dir, self.temp_dir):
             directory.mkdir(parents=True, exist_ok=True)
 
-    async def save_svg_upload(self, job_id: str, upload: UploadFile) -> tuple[str, Path]:
+    async def save_upload(self, job_id: str, upload: UploadFile) -> tuple[str, Path, InputFormat]:
         self._validate_upload_metadata(upload)
         filename = sanitize_filename(upload.filename or "upload.svg")
-        if Path(filename).suffix.lower() != ".svg":
-            raise ValidationAppError("Only SVG files are supported.", code="invalid_file_type")
+        input_format = self._format_from_filename(filename)
 
         job_dir = self.input_dir / job_id
         job_dir.mkdir(parents=True, exist_ok=True)
@@ -76,10 +84,17 @@ class LocalFileStorage:
 
         if size == 0:
             destination.unlink(missing_ok=True)
-            raise ValidationAppError("Uploaded SVG file is empty.", code="empty_file")
+            raise ValidationAppError("Uploaded file is empty.", code="empty_file")
 
-        self.validate_svg_file(destination)
-        return filename, destination
+        self.validate_input_file(destination, input_format)
+        return filename, destination, input_format
+
+    async def save_svg_upload(self, job_id: str, upload: UploadFile) -> tuple[str, Path]:
+        filename, path, input_format = await self.save_upload(job_id, upload)
+        if input_format != InputFormat.SVG:
+            path.unlink(missing_ok=True)
+            raise ValidationAppError("Only SVG files are supported.", code="invalid_file_type")
+        return filename, path
 
     def output_path_for(self, job_id: str, output_format: str) -> Path:
         output_dir = self.output_dir / job_id
@@ -109,11 +124,38 @@ class LocalFileStorage:
                 code="invalid_svg",
             ) from exc
 
+    def validate_input_file(self, path: Path, input_format: InputFormat) -> None:
+        if input_format == InputFormat.SVG:
+            self.validate_svg_file(path)
+            return
+        self.validate_raster_file(path, input_format)
+
+    def validate_raster_file(self, path: Path, input_format: InputFormat) -> None:
+        header = path.read_bytes()[:16]
+        if input_format == InputFormat.PNG and header.startswith(b"\x89PNG\r\n\x1a\n"):
+            return
+        if input_format in {InputFormat.JPG, InputFormat.JPEG} and header.startswith(b"\xff\xd8\xff"):
+            return
+        raise ValidationAppError(
+            "Uploaded image content does not match its file extension.",
+            code="invalid_image",
+        )
+
     @staticmethod
     def _validate_upload_metadata(upload: UploadFile) -> None:
         content_type = (upload.content_type or "").split(";")[0].strip().lower()
-        if content_type and content_type not in _SVG_CONTENT_TYPES:
+        if content_type and content_type not in _ALLOWED_CONTENT_TYPES:
             raise ValidationAppError(
-                "Only SVG uploads are accepted.",
+                "Only SVG, PNG, JPG, and JPEG uploads are accepted.",
                 code="invalid_content_type",
             )
+
+    @staticmethod
+    def _format_from_filename(filename: str) -> InputFormat:
+        input_format = _EXTENSION_TO_FORMAT.get(Path(filename).suffix.lower())
+        if input_format not in SUPPORTED_INPUT_FORMATS:
+            raise ValidationAppError(
+                "Only SVG, PNG, JPG, and JPEG files are supported.",
+                code="invalid_file_type",
+            )
+        return input_format

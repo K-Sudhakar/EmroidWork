@@ -2,12 +2,13 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.backend.models.job import Job, JobStatus, OutputFormat
+from app.backend.models.job import InputFormat, Job, JobStatus, OutputFormat
 
 
 class JobCreateResponse(BaseModel):
     job_id: str
     filename: str
+    input_format: InputFormat
     output_format: OutputFormat
     status: JobStatus
     created_at: datetime
@@ -17,6 +18,7 @@ class JobCreateResponse(BaseModel):
         return cls(
             job_id=job.job_id,
             filename=job.filename,
+            input_format=job.input_format,
             output_format=job.output_format,
             status=job.status,
             created_at=job.created_at,
@@ -26,6 +28,7 @@ class JobCreateResponse(BaseModel):
 class JobResponse(BaseModel):
     job_id: str
     filename: str
+    input_format: InputFormat
     output_format: OutputFormat
     status: JobStatus
     error_message: str | None = None
@@ -43,6 +46,7 @@ class JobResponse(BaseModel):
         return cls(
             job_id=job.job_id,
             filename=job.filename,
+            input_format=job.input_format,
             output_format=job.output_format,
             status=job.status,
             error_message=job.error_message,
@@ -55,6 +59,8 @@ class JobResponse(BaseModel):
 class HealthDependencyStatus(BaseModel):
     inkscape: bool
     inkstitch_extension: bool
+    imagemagick: bool
+    potrace: bool
     detail: str | None = None
 
 
