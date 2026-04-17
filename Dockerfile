@@ -19,6 +19,13 @@ RUN apt-get update \
         ca-certificates \
         curl \
         inkscape \
+        libdrm2 \
+        libgtk-3-0 \
+        libnss3 \
+        libsm6 \
+        libxext6 \
+        libxrender1 \
+        libxtst6 \
         unzip \
         xz-utils \
     && rm -rf /var/lib/apt/lists/*
@@ -33,7 +40,8 @@ RUN mkdir -p "${INKSTITCH_EXT_PATH}" \
     && inkscape --version \
     && test -f "${INKSTITCH_BIN_PATH}" \
     && chmod +x "${INKSTITCH_BIN_PATH}" \
-    && test -x "${INKSTITCH_BIN_PATH}"
+    && test -x "${INKSTITCH_BIN_PATH}" \
+    && ! ldd "${INKSTITCH_BIN_PATH}" | grep "not found"
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

@@ -43,7 +43,7 @@ DATA_PATH=/data
 MAX_FILE_SIZE=10485760
 INKSCAPE_PATH=inkscape
 INKSTITCH_EXT_PATH=/root/.config/inkscape/extensions
-INKSTITCH_BIN_PATH=/root/.config/inkscape/extensions/inkstitch
+INKSTITCH_BIN_PATH=/root/.config/inkscape/extensions/inkstitch/bin/inkstitch
 INKSTITCH_TIMEOUT_SECONDS=120
 ```
 
@@ -77,7 +77,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 export DATA_PATH=./data
 export INKSTITCH_EXT_PATH="$HOME/.config/inkscape/extensions"
-export INKSTITCH_BIN_PATH="$HOME/.config/inkscape/extensions/inkstitch"
+export INKSTITCH_BIN_PATH="$HOME/.config/inkscape/extensions/inkstitch/bin/inkstitch"
 uvicorn app.backend.main:app --reload
 ```
 
@@ -102,7 +102,7 @@ inkscape --version
 Check the Ink/Stitch extension placement in Docker:
 
 ```bash
-docker compose run --rm embroidery-api sh -lc 'ls -la /root/.config/inkscape/extensions && test -e /root/.config/inkscape/extensions/inkstitch'
+docker compose run --rm embroidery-api sh -lc 'ls -l /root/.config/inkscape/extensions/inkstitch/bin/inkstitch && ldd /root/.config/inkscape/extensions/inkstitch/bin/inkstitch | grep "not found" || true'
 ```
 
 Check the API diagnostic:
