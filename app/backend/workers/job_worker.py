@@ -9,6 +9,8 @@ from app.backend.storage.local import LocalFileStorage
 
 logger = logging.getLogger(__name__)
 
+_MAX_ERROR_DETAIL_LENGTH = 700
+
 
 class JobWorker:
     def __init__(
@@ -87,7 +89,12 @@ class JobWorker:
                     "stderr": exc.stderr[:1000],
                 },
             )
-            self.repository.update(job.with_status(JobStatus.FAILED, error_message=exc.message))
+            self.repository.update(
+                job.with_status(
+                    JobStatus.FAILED,
+                    error_message=_format_conversion_error(exc),
+                )
+            )
         except Exception:
             logger.exception("Job failed", extra={"job_id": job_id})
             self.repository.update(
@@ -95,3 +102,12 @@ class JobWorker:
             )
         finally:
             self.storage.cleanup_temp(job_id)
+
+
+def _format_conversion_error(exc: InkstitchExecutionError) -> str:
+    detail = " ".join((exc.stderr or "").split())
+    if not detail:
+        return exc.message
+    if len(detail) > _MAX_ERROR_DETAIL_LENGTH:
+        detail = f"{detail[:_MAX_ERROR_DETAIL_LENGTH]}..."
+    return f"{exc.message} Detail: {detail}"
