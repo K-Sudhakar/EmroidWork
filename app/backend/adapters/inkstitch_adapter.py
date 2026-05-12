@@ -10,6 +10,7 @@ from app.backend.core.errors import DependencyAppError
 from app.backend.models.job import OutputFormat
 
 logger = logging.getLogger(__name__)
+_INVALID_ARCHIVE_PREVIEW_BYTES = 2048
 
 
 @dataclass(frozen=True)
@@ -150,11 +151,12 @@ class InkstitchAdapter:
                     env=self._subprocess_env(),
                 )
         except subprocess.TimeoutExpired as exc:
+            temp_zip_path.unlink(missing_ok=True)
             stderr = exc.stderr or b""
             if isinstance(stderr, bytes):
                 stderr = stderr.decode("utf-8", errors="replace")
             raise InkstitchExecutionError(
-                "Ink/Stitch conversion timed out.",
+                f"Ink/Stitch conversion timed out after {self.timeout_seconds} seconds.",
                 stderr=stderr,
                 timed_out=True,
             ) from exc
@@ -170,11 +172,20 @@ class InkstitchAdapter:
                 exit_code=completed.returncode,
             )
 
-        self._extract_format_from_zip(
-            zip_path=temp_zip_path,
-            output_path=output_path,
-            output_format=output_format,
-        )
+        try:
+            self._extract_format_from_zip(
+                zip_path=temp_zip_path,
+                output_path=output_path,
+                output_format=output_format,
+            )
+        except InkstitchExecutionError as exc:
+            temp_zip_path.unlink(missing_ok=True)
+            raise InkstitchExecutionError(
+                exc.message,
+                stdout=exc.stdout,
+                stderr=stderr,
+                exit_code=completed.returncode,
+            ) from exc
         temp_zip_path.unlink(missing_ok=True)
         return ConversionResult(
             output_path=output_path,
@@ -223,6 +234,11 @@ class InkstitchAdapter:
         output_format: OutputFormat,
     ) -> None:
         extension = f".{output_format.value.lower()}"
+        if not zipfile.is_zipfile(zip_path):
+            raise InkstitchExecutionError(
+                "Ink/Stitch did not return a valid zip export archive.",
+                stdout=_preview_file(zip_path),
+            )
         try:
             with zipfile.ZipFile(zip_path) as archive:
                 match = next(
@@ -241,7 +257,8 @@ class InkstitchAdapter:
                     shutil.copyfileobj(source, destination)
         except zipfile.BadZipFile as exc:
             raise InkstitchExecutionError(
-                "Ink/Stitch did not return a valid zip export archive."
+                "Ink/Stitch did not return a valid zip export archive.",
+                stdout=_preview_file(zip_path),
             ) from exc
 
     @staticmethod
@@ -249,3 +266,11 @@ class InkstitchAdapter:
         env = os.environ.copy()
         env.setdefault("GDK_BACKEND", "x11")
         return env
+
+
+def _preview_file(path: Path) -> str:
+    try:
+        data = path.read_bytes()[:_INVALID_ARCHIVE_PREVIEW_BYTES]
+    except OSError:
+        return ""
+    return data.decode("utf-8", errors="replace").strip()

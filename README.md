@@ -44,13 +44,21 @@ MAX_FILE_SIZE=10485760
 INKSCAPE_PATH=inkscape
 INKSTITCH_EXT_PATH=/root/.config/inkscape/extensions
 INKSTITCH_BIN_PATH=/root/.config/inkscape/extensions/inkstitch/bin/inkstitch
-INKSTITCH_TIMEOUT_SECONDS=120
+INKSTITCH_TIMEOUT_SECONDS=300
 IMAGEMAGICK_PATH=convert
 POTRACE_PATH=potrace
 RASTER_VECTORIZE_TIMEOUT_SECONDS=120
+RASTER_MAX_DIMENSION=512
+SVG_PREFLIGHT_MAX_ELEMENTS=5000
+SVG_PREFLIGHT_MAX_PATHS=2000
+SVG_PREFLIGHT_MAX_PATH_DATA_CHARS=250000
+SVG_PREFLIGHT_MAX_DIMENSION=10000
+SVG_PREFLIGHT_ALLOW_EMBEDDED_IMAGES=false
 ```
 
 The MVP supports `output_format=dst`. PES is represented in the model for future extension but is rejected until implemented. Raster inputs are auto-traced for simple logo-style images; production embroidery quality is still best with clean SVG paths.
+
+SVG inputs are preflighted before Ink/Stitch runs. The preflight rejects documents with excessive element counts, excessive path counts, very large path data, oversized dimensions, or embedded raster images. This keeps one pathological SVG from consuming the worker until the hard Ink/Stitch timeout. Increase `INKSTITCH_TIMEOUT_SECONDS` for genuinely large valid designs; increase the `SVG_PREFLIGHT_*` limits only when the worker has enough CPU/RAM and the input source is trusted.
 
 ## Run With Docker
 

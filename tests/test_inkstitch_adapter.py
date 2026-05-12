@@ -1,7 +1,8 @@
+import subprocess
 import zipfile
 
 import app.backend.adapters.inkstitch_adapter as inkstitch_adapter_module
-from app.backend.adapters.inkstitch_adapter import InkstitchAdapter
+from app.backend.adapters.inkstitch_adapter import InkstitchAdapter, InkstitchExecutionError
 from app.backend.models.job import OutputFormat
 
 
@@ -31,6 +32,24 @@ def test_extract_dst_from_zip(tmp_path):
     )
 
     assert output_path.read_bytes() == b"dst-bytes"
+
+
+def test_extract_dst_from_invalid_zip_includes_output_preview(tmp_path):
+    zip_path = tmp_path / "result.zip"
+    output_path = tmp_path / "output.dst"
+    zip_path.write_text("Ink/Stitch warning: no stitchable elements found\n", encoding="utf-8")
+
+    try:
+        InkstitchAdapter._extract_format_from_zip(
+            zip_path=zip_path,
+            output_path=output_path,
+            output_format=OutputFormat.DST,
+        )
+    except InkstitchExecutionError as exc:
+        assert exc.message == "Ink/Stitch did not return a valid zip export archive."
+        assert exc.stdout == "Ink/Stitch warning: no stitchable elements found"
+    else:
+        raise AssertionError("Expected InkstitchExecutionError")
 
 
 def test_dependency_status_rejects_non_executable_inkstitch_binary(tmp_path, monkeypatch):
@@ -66,3 +85,40 @@ def test_resolve_inkstitch_binary_from_extracted_extension_directory(tmp_path):
     )
 
     assert adapter._resolve_inkstitch_binary() == binary
+
+
+def test_convert_timeout_includes_configured_limit_and_cleans_temp_zip(
+    tmp_path,
+    monkeypatch,
+):
+    binary = tmp_path / "inkstitch"
+    binary.write_text("#!/bin/sh\n", encoding="utf-8")
+    temp_zip_path = tmp_path / "output.zip"
+
+    def timeout_run(*_args, **_kwargs):
+        raise subprocess.TimeoutExpired(cmd="inkstitch", timeout=300, stderr=b"busy")
+
+    monkeypatch.setattr(inkstitch_adapter_module.os, "access", lambda _path, _mode: True)
+    monkeypatch.setattr(inkstitch_adapter_module.subprocess, "run", timeout_run)
+
+    adapter = InkstitchAdapter(
+        inkscape_path="python",
+        extension_path=tmp_path,
+        inkstitch_bin_path=binary,
+        timeout_seconds=300,
+    )
+
+    try:
+        adapter.convert(
+            input_path=tmp_path / "input.svg",
+            output_path=tmp_path / "output.dst",
+            output_format=OutputFormat.DST,
+            temp_zip_path=temp_zip_path,
+        )
+    except InkstitchExecutionError as exc:
+        assert exc.message == "Ink/Stitch conversion timed out after 300 seconds."
+        assert exc.stderr == "busy"
+        assert exc.timed_out is True
+        assert not temp_zip_path.exists()
+    else:
+        raise AssertionError("Expected InkstitchExecutionError")

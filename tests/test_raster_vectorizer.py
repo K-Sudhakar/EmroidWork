@@ -6,6 +6,7 @@ def test_build_imagemagick_command(tmp_path):
         imagemagick_path="convert",
         potrace_path="potrace",
         timeout_seconds=1,
+        max_dimension=512,
     )
 
     command = vectorizer._build_imagemagick_command(
@@ -16,12 +17,20 @@ def test_build_imagemagick_command(tmp_path):
     assert command == [
         "convert",
         str(tmp_path / "input.png"),
+        "-auto-orient",
+        "-resize",
+        "512x512>",
+        "-strip",
         "-alpha",
         "remove",
+        "-background",
+        "white",
         "-colorspace",
         "Gray",
+        "-despeckle",
         "-threshold",
         "60%",
+        "-monochrome",
         str(tmp_path / "output.pbm"),
     ]
 

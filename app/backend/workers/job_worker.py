@@ -5,6 +5,7 @@ from pathlib import Path
 
 from app.backend.adapters.inkstitch_adapter import InkstitchAdapter, InkstitchExecutionError
 from app.backend.adapters.raster_vectorizer import RasterVectorizationError, RasterVectorizer
+from app.backend.adapters.svg_preflight import SvgPreflight, SvgPreflightError
 from app.backend.models.job import InputFormat, JobStatus
 from app.backend.storage.job_repository import JsonJobRepository
 from app.backend.storage.local import LocalFileStorage
@@ -22,11 +23,13 @@ class JobWorker:
         storage: LocalFileStorage,
         converter: InkstitchAdapter,
         vectorizer: RasterVectorizer,
+        svg_preflight: SvgPreflight,
     ) -> None:
         self.repository = repository
         self.storage = storage
         self.converter = converter
         self.vectorizer = vectorizer
+        self.svg_preflight = svg_preflight
         self._queue: queue.Queue[str | None] = queue.Queue()
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
@@ -72,6 +75,7 @@ class JobWorker:
             output_path = self.storage.output_path_for(job.job_id, job.output_format.value)
             temp_zip_path = self.storage.temp_path_for(job.job_id, f"{job.job_id}.zip")
             conversion_input_path = self._prepare_conversion_input(job_id)
+            self.svg_preflight.validate(conversion_input_path)
 
             job = self.repository.update(job.with_status(JobStatus.PROCESSING))
             result = self.converter.convert(
@@ -111,6 +115,17 @@ class JobWorker:
                     error_message=_format_vectorization_error(exc),
                 )
             )
+        except SvgPreflightError as exc:
+            logger.error(
+                "Job SVG preflight failed",
+                extra={"job_id": job_id, "error": exc.message},
+            )
+            self.repository.update(
+                job.with_status(
+                    JobStatus.FAILED,
+                    error_message=exc.message,
+                )
+            )
         except Exception:
             logger.exception("Job failed", extra={"job_id": job_id})
             self.repository.update(
@@ -136,7 +151,7 @@ class JobWorker:
 
 
 def _format_conversion_error(exc: InkstitchExecutionError) -> str:
-    detail = " ".join((exc.stderr or "").split())
+    detail = " ".join((exc.stderr or exc.stdout or "").split())
     if not detail:
         return exc.message
     if len(detail) > _MAX_ERROR_DETAIL_LENGTH:

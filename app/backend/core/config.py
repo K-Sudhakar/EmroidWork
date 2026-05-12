@@ -17,10 +17,16 @@ class Settings(BaseSettings):
     inkscape_path: str = "inkscape"
     inkstitch_ext_path: Path | None = Path("/root/.config/inkscape/extensions")
     inkstitch_bin_path: Path | None = None
-    inkstitch_timeout_seconds: int = Field(default=120, ge=1)
+    inkstitch_timeout_seconds: int = Field(default=300, ge=1)
     imagemagick_path: str = "convert"
     potrace_path: str = "potrace"
     raster_vectorize_timeout_seconds: int = Field(default=120, ge=1)
+    raster_max_dimension: int = Field(default=512, ge=64)
+    svg_preflight_max_elements: int = Field(default=5000, ge=1)
+    svg_preflight_max_paths: int = Field(default=2000, ge=1)
+    svg_preflight_max_path_data_chars: int = Field(default=250000, ge=1)
+    svg_preflight_max_dimension: int = Field(default=10000, ge=1)
+    svg_preflight_allow_embedded_images: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",

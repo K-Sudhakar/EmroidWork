@@ -24,10 +24,12 @@ class RasterVectorizer:
         imagemagick_path: str = "convert",
         potrace_path: str = "potrace",
         timeout_seconds: int = 120,
+        max_dimension: int = 512,
     ) -> None:
         self.imagemagick_path = imagemagick_path
         self.potrace_path = potrace_path
         self.timeout_seconds = timeout_seconds
+        self.max_dimension = max_dimension
 
     def dependency_status(self) -> tuple[bool, bool, str | None]:
         imagemagick_ok, imagemagick_detail = self._check_command(
@@ -98,12 +100,20 @@ class RasterVectorizer:
         return [
             self.imagemagick_path,
             str(input_path),
+            "-auto-orient",
+            "-resize",
+            f"{self.max_dimension}x{self.max_dimension}>",
+            "-strip",
             "-alpha",
             "remove",
+            "-background",
+            "white",
             "-colorspace",
             "Gray",
+            "-despeckle",
             "-threshold",
             "60%",
+            "-monochrome",
             str(bitmap_path),
         ]
 
