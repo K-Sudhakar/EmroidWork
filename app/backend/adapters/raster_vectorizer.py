@@ -43,7 +43,7 @@ class RasterVectorizer:
         preserve_background: bool = False,
         turdsize: int = 8,
         opttolerance: float = 0.2,
-        max_path_data_chars: int = 180_000,
+        max_path_data_chars: int = 250_000,
         min_dimension: int = 192,
         min_colors: int = 2,
     ) -> None:
