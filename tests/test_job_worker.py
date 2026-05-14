@@ -52,6 +52,21 @@ class UnusedVectorizer:
     pass
 
 
+class AcceptingDesignValidator:
+    def validate(self, _path):
+        return None
+
+
+class PassthroughPreparer:
+    def prepare(self, *, input_path, output_path):
+        output_path.write_bytes(input_path.read_bytes())
+
+        class Result:
+            svg_path = output_path
+
+        return Result()
+
+
 def test_worker_fails_job_when_svg_preflight_rejects_input(tmp_path):
     input_dir = tmp_path / "input"
     output_dir = tmp_path / "output"
@@ -84,7 +99,10 @@ def test_worker_fails_job_when_svg_preflight_rejects_input(tmp_path):
         storage=storage,
         converter=UnusedConverter(),
         vectorizer=UnusedVectorizer(),
+        design_validator=AcceptingDesignValidator(),
+        embroidery_preparer=PassthroughPreparer(),
         svg_preflight=RejectingPreflight(),
+        dst_validator=AcceptingDesignValidator(),
     )
 
     worker._process(job_id)
@@ -92,3 +110,55 @@ def test_worker_fails_job_when_svg_preflight_rejects_input(tmp_path):
     saved = repository.get(job_id)
     assert saved.status == JobStatus.FAILED
     assert saved.error_message == "SVG is too complex for conversion."
+
+
+def test_worker_reenqueues_unfinished_jobs_on_startup(tmp_path):
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    temp_dir = tmp_path / "temp"
+    storage = LocalFileStorage(
+        input_dir=input_dir,
+        output_dir=output_dir,
+        temp_dir=temp_dir,
+        max_file_size=1024,
+    )
+    repository = JsonJobRepository(tmp_path / "jobs")
+    storage.ensure_directories()
+    repository.ensure_directories()
+    received = Job(
+        job_id="a" * 32,
+        filename="input.svg",
+        input_path=input_dir / "input.svg",
+        output_format=OutputFormat.DST,
+    )
+    processing = received.model_copy(
+        update={
+            "job_id": "b" * 32,
+            "status": JobStatus.PROCESSING,
+        }
+    )
+    failed = received.model_copy(
+        update={
+            "job_id": "c" * 32,
+            "status": JobStatus.FAILED,
+        }
+    )
+    repository.create(received)
+    repository.create(processing)
+    repository.create(failed)
+    worker = JobWorker(
+        repository=repository,
+        storage=storage,
+        converter=UnusedConverter(),
+        vectorizer=UnusedVectorizer(),
+        design_validator=AcceptingDesignValidator(),
+        embroidery_preparer=PassthroughPreparer(),
+        svg_preflight=RejectingPreflight(),
+        dst_validator=AcceptingDesignValidator(),
+    )
+
+    count = worker.enqueue_unfinished_jobs()
+
+    assert count == 2
+    assert worker._queue.get_nowait() == received.job_id
+    assert worker._queue.get_nowait() == processing.job_id

@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.backend.core.errors import NotFoundAppError, ValidationAppError
-from app.backend.models.job import Job
+from app.backend.models.job import Job, JobStatus
 
 _JOB_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$")
 
@@ -39,6 +39,17 @@ class JsonJobRepository:
             job = job.model_copy(update={"updated_at": datetime.now(UTC)})
             self._write(job)
             return job
+
+    def list_by_statuses(self, statuses: set[JobStatus]) -> list[Job]:
+        with self._lock:
+            if not self.jobs_dir.exists():
+                return []
+            jobs = []
+            for path in self.jobs_dir.glob("*.json"):
+                job = self._read(path)
+                if job.status in statuses:
+                    jobs.append(job)
+            return sorted(jobs, key=lambda job: job.created_at)
 
     def _path_for(self, job_id: str) -> Path:
         if not _JOB_ID_PATTERN.fullmatch(job_id):

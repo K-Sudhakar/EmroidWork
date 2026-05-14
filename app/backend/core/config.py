@@ -27,6 +27,22 @@ class Settings(BaseSettings):
     svg_preflight_max_path_data_chars: int = Field(default=250000, ge=1)
     svg_preflight_max_dimension: int = Field(default=10000, ge=1)
     svg_preflight_allow_embedded_images: bool = False
+    design_max_width_mm: float = Field(default=100, gt=0)
+    design_max_height_mm: float = Field(default=100, gt=0)
+    design_min_width_mm: float = Field(default=1, gt=0)
+    design_min_height_mm: float = Field(default=1, gt=0)
+    design_min_path_dimension_mm: float = Field(default=0.4, gt=0)
+    design_max_tiny_paths: int = Field(default=20, ge=0)
+    dst_min_stitches: int = Field(default=1, ge=0)
+    dst_max_stitches: int = Field(default=100000, ge=1)
+    embroidery_fill_row_spacing_mm: float = Field(default=0.4, gt=0)
+    embroidery_fill_max_stitch_length_mm: float = Field(default=4.0, gt=0)
+    embroidery_fill_underlay: bool = True
+    embroidery_fill_underlay_inset_mm: float = Field(default=0.4, ge=0)
+    embroidery_fill_underlay_row_spacing_mm: float = Field(default=3.0, gt=0)
+    embroidery_running_stitch_length_mm: float = Field(default=2.5, gt=0)
+    embroidery_running_stitch_repeats: int = Field(default=1, ge=1)
+    embroidery_lock_stitches: bool = True
 
     model_config = SettingsConfigDict(
         env_file=".env",

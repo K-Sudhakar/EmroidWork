@@ -54,9 +54,29 @@ SVG_PREFLIGHT_MAX_PATHS=2000
 SVG_PREFLIGHT_MAX_PATH_DATA_CHARS=250000
 SVG_PREFLIGHT_MAX_DIMENSION=10000
 SVG_PREFLIGHT_ALLOW_EMBEDDED_IMAGES=false
+DESIGN_MAX_WIDTH_MM=100
+DESIGN_MAX_HEIGHT_MM=100
+DESIGN_MIN_WIDTH_MM=1
+DESIGN_MIN_HEIGHT_MM=1
+DESIGN_MIN_PATH_DIMENSION_MM=0.4
+DESIGN_MAX_TINY_PATHS=20
+DST_MIN_STITCHES=1
+DST_MAX_STITCHES=100000
+EMBROIDERY_FILL_ROW_SPACING_MM=0.4
+EMBROIDERY_FILL_MAX_STITCH_LENGTH_MM=4.0
+EMBROIDERY_FILL_UNDERLAY=true
+EMBROIDERY_FILL_UNDERLAY_INSET_MM=0.4
+EMBROIDERY_FILL_UNDERLAY_ROW_SPACING_MM=3.0
+EMBROIDERY_RUNNING_STITCH_LENGTH_MM=2.5
+EMBROIDERY_RUNNING_STITCH_REPEATS=1
+EMBROIDERY_LOCK_STITCHES=true
 ```
 
 The MVP supports `output_format=dst`. PES is represented in the model for future extension but is rejected until implemented. Raster inputs are auto-traced for simple logo-style images; production embroidery quality is still best with clean SVG paths.
+
+Before Ink/Stitch export, the worker writes a prepared SVG copy with explicit Ink/Stitch parameters. Filled paths are marked for auto-fill with configurable row spacing, maximum stitch length, underlay, and lock stitches. Stroked paths are marked with configurable running-stitch length, repeat count, and lock stitches. Existing `inkstitch:*` attributes in an uploaded SVG are preserved, so hand-digitized SVG settings are not overwritten.
+
+The worker also validates embroidery-specific constraints before and after export. Prepared SVGs must define a real design size through `width`/`height` or `viewBox`, stay within the configured hoop limits, and avoid excessive tiny path geometry. Generated DST files are parsed before completion to reject malformed files, empty stitch output, excessive stitch counts, and output dimensions outside the configured hoop limits.
 
 SVG inputs are preflighted before Ink/Stitch runs. The preflight rejects documents with excessive element counts, excessive path counts, very large path data, oversized dimensions, or embedded raster images. This keeps one pathological SVG from consuming the worker until the hard Ink/Stitch timeout. Increase `INKSTITCH_TIMEOUT_SECONDS` for genuinely large valid designs; increase the `SVG_PREFLIGHT_*` limits only when the worker has enough CPU/RAM and the input source is trusted.
 

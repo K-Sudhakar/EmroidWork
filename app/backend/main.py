@@ -7,8 +7,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.backend.adapters.dst_validator import DstValidator
 from app.backend.adapters.inkstitch_adapter import InkstitchAdapter
 from app.backend.adapters.raster_vectorizer import RasterVectorizer
+from app.backend.adapters.svg_design_validator import SvgDesignValidator
+from app.backend.adapters.svg_embroidery_preparer import SvgEmbroideryPreparer
 from app.backend.adapters.svg_preflight import SvgPreflight
 from app.backend.api.routes import router
 from app.backend.core.config import get_settings
@@ -26,7 +29,10 @@ class AppState:
     repository: JsonJobRepository | None = None
     converter: InkstitchAdapter | None = None
     vectorizer: RasterVectorizer | None = None
+    design_validator: SvgDesignValidator | None = None
+    embroidery_preparer: SvgEmbroideryPreparer | None = None
     svg_preflight: SvgPreflight | None = None
+    dst_validator: DstValidator | None = None
     worker: JobWorker | None = None
     job_service: JobService | None = None
 
@@ -58,12 +64,36 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         timeout_seconds=settings.raster_vectorize_timeout_seconds,
         max_dimension=settings.raster_max_dimension,
     )
+    design_validator = SvgDesignValidator(
+        max_width_mm=settings.design_max_width_mm,
+        max_height_mm=settings.design_max_height_mm,
+        min_width_mm=settings.design_min_width_mm,
+        min_height_mm=settings.design_min_height_mm,
+        min_path_dimension_mm=settings.design_min_path_dimension_mm,
+        max_tiny_paths=settings.design_max_tiny_paths,
+    )
+    embroidery_preparer = SvgEmbroideryPreparer(
+        fill_row_spacing_mm=settings.embroidery_fill_row_spacing_mm,
+        fill_max_stitch_length_mm=settings.embroidery_fill_max_stitch_length_mm,
+        fill_underlay=settings.embroidery_fill_underlay,
+        fill_underlay_inset_mm=settings.embroidery_fill_underlay_inset_mm,
+        fill_underlay_row_spacing_mm=settings.embroidery_fill_underlay_row_spacing_mm,
+        running_stitch_length_mm=settings.embroidery_running_stitch_length_mm,
+        running_stitch_repeats=settings.embroidery_running_stitch_repeats,
+        lock_stitches=settings.embroidery_lock_stitches,
+    )
     svg_preflight = SvgPreflight(
         max_elements=settings.svg_preflight_max_elements,
         max_paths=settings.svg_preflight_max_paths,
         max_path_data_chars=settings.svg_preflight_max_path_data_chars,
         max_dimension=settings.svg_preflight_max_dimension,
         allow_embedded_images=settings.svg_preflight_allow_embedded_images,
+    )
+    dst_validator = DstValidator(
+        min_stitches=settings.dst_min_stitches,
+        max_stitches=settings.dst_max_stitches,
+        max_width_mm=settings.design_max_width_mm,
+        max_height_mm=settings.design_max_height_mm,
     )
     storage.ensure_directories()
     repository.ensure_directories()
@@ -72,7 +102,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         storage=storage,
         converter=converter,
         vectorizer=vectorizer,
+        design_validator=design_validator,
+        embroidery_preparer=embroidery_preparer,
         svg_preflight=svg_preflight,
+        dst_validator=dst_validator,
     )
     job_service = JobService(repository=repository, storage=storage, worker=worker)
 
@@ -80,7 +113,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     app_state.repository = repository
     app_state.converter = converter
     app_state.vectorizer = vectorizer
+    app_state.design_validator = design_validator
+    app_state.embroidery_preparer = embroidery_preparer
     app_state.svg_preflight = svg_preflight
+    app_state.dst_validator = dst_validator
     app_state.worker = worker
     app_state.job_service = job_service
 
