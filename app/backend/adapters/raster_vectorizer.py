@@ -43,6 +43,9 @@ class RasterVectorizer:
         preserve_background: bool = False,
         turdsize: int = 8,
         opttolerance: float = 0.2,
+        max_path_data_chars: int = 180_000,
+        min_dimension: int = 192,
+        min_colors: int = 2,
     ) -> None:
         self.imagemagick_path = imagemagick_path
         self.potrace_path = potrace_path
@@ -55,6 +58,9 @@ class RasterVectorizer:
         self.preserve_background = preserve_background
         self.turdsize = turdsize
         self.opttolerance = opttolerance
+        self.max_path_data_chars = max_path_data_chars
+        self.min_dimension = min_dimension
+        self.min_colors = min_colors
         self._validate_options()
 
     def dependency_status(self) -> tuple[bool, bool, str | None]:
@@ -65,18 +71,36 @@ class RasterVectorizer:
         bitmap_path.parent.mkdir(parents=True, exist_ok=True)
         svg_path.parent.mkdir(parents=True, exist_ok=True)
 
-        source = self._resize_if_needed(self._open_image(input_path).convert("RGBA"))
-        source = self._cleanup_background(source, self.background_tolerance)
-        rgb = self._flatten_to_white(source)
+        source = self._open_image(input_path).convert("RGBA")
+        stderr = ""
+        last_complexity = 0
 
-        with tempfile.TemporaryDirectory(
-            prefix="raster-vectorizer-",
-            dir=str(bitmap_path.parent),
-        ) as tempdir:
-            if self.mode == "bw":
-                stderr = self._convert_bw(rgb, svg_path, tempdir)
-            else:
-                stderr = self._convert_color(rgb, svg_path, tempdir)
+        for profile in self._conversion_profiles():
+            svg_path.unlink(missing_ok=True)
+            prepared = self._resize_if_needed(source, max_dimension=profile["max_dimension"])
+            prepared = self._cleanup_background(prepared.copy(), self.background_tolerance)
+            rgb = self._flatten_to_white(prepared)
+
+            with tempfile.TemporaryDirectory(
+                prefix="raster-vectorizer-",
+                dir=str(bitmap_path.parent),
+            ) as tempdir:
+                if self.mode == "bw":
+                    stderr = self._convert_bw(rgb, svg_path, tempdir, profile)
+                else:
+                    stderr = self._convert_color(rgb, svg_path, tempdir, profile)
+
+            last_complexity = self._svg_path_data_chars(svg_path)
+            if last_complexity <= self.max_path_data_chars:
+                break
+        else:
+            raise RasterVectorizationError(
+                "Raster image produced SVG paths that are too complex for embroidery conversion.",
+                stderr=(
+                    f"path_data_chars={last_complexity} "
+                    f"limit={self.max_path_data_chars}"
+                ),
+            )
 
         if not svg_path.exists() or svg_path.stat().st_size == 0:
             raise RasterVectorizationError("Raster vectorization did not produce an SVG.")
@@ -93,6 +117,14 @@ class RasterVectorizer:
             raise ValueError("threshold must be between 0 and 255")
         if self.max_dimension < 64:
             raise ValueError("max_dimension must be at least 64")
+        if self.min_dimension < 64:
+            raise ValueError("min_dimension must be at least 64")
+        if self.min_dimension > self.max_dimension:
+            raise ValueError("min_dimension cannot exceed max_dimension")
+        if not 1 <= self.min_colors <= self.colors:
+            raise ValueError("min_colors must be between 1 and colors")
+        if self.max_path_data_chars < 1:
+            raise ValueError("max_path_data_chars must be at least 1")
 
     def _open_image(self, path: Path) -> Image.Image:
         try:
@@ -110,11 +142,12 @@ class RasterVectorizer:
             )
         return img
 
-    def _resize_if_needed(self, img: Image.Image) -> Image.Image:
+    def _resize_if_needed(self, img: Image.Image, *, max_dimension: int | None = None) -> Image.Image:
+        max_dimension = max_dimension or self.max_dimension
         longest = max(img.size)
-        if longest <= self.max_dimension:
+        if longest <= max_dimension:
             return img
-        scale = self.max_dimension / float(longest)
+        scale = max_dimension / float(longest)
         size = (max(1, int(img.width * scale)), max(1, int(img.height * scale)))
         return img.resize(size, Image.Resampling.LANCZOS)
 
@@ -161,14 +194,34 @@ class RasterVectorizer:
         text = svg_path.read_text(encoding="utf-8", errors="ignore")
         return re.findall(r'<path[^>]*\sd="([^"]+)"[^>]*/?>', text)
 
-    def _trace_mask(self, mask: Image.Image, tempdir: str, name: str) -> tuple[list[str], str]:
+    def _trace_mask(
+        self,
+        mask: Image.Image,
+        tempdir: str,
+        name: str,
+        profile: dict[str, float | int],
+    ) -> tuple[list[str], str]:
         pbm = Path(tempdir) / f"{name}.pbm"
         traced = Path(tempdir) / f"{name}.svg"
         self._save_pbm(mask, pbm)
-        result = self._run(self._build_potrace_command(pbm, traced), "Raster vectorization failed.")
+        result = self._run(
+            self._build_potrace_command(
+                pbm,
+                traced,
+                turdsize=int(profile["turdsize"]),
+                opttolerance=float(profile["opttolerance"]),
+            ),
+            "Raster vectorization failed.",
+        )
         return self._path_data_from_svg(traced), result.stderr
 
-    def _convert_bw(self, img: Image.Image, output: Path, tempdir: str) -> str:
+    def _convert_bw(
+        self,
+        img: Image.Image,
+        output: Path,
+        tempdir: str,
+        profile: dict[str, float | int],
+    ) -> str:
         gray = ImageOps.grayscale(img)
         gray = ImageOps.autocontrast(gray)
         gray = ImageEnhance.Contrast(gray).enhance(1.15)
@@ -176,13 +229,27 @@ class RasterVectorizer:
 
         pbm = Path(tempdir) / "bw.pbm"
         self._save_pbm(mask, pbm)
-        result = self._run(self._build_potrace_command(pbm, output), "Raster vectorization failed.")
+        result = self._run(
+            self._build_potrace_command(
+                pbm,
+                output,
+                turdsize=int(profile["turdsize"]),
+                opttolerance=float(profile["opttolerance"]),
+            ),
+            "Raster vectorization failed.",
+        )
         return result.stderr
 
-    def _convert_color(self, img: Image.Image, output: Path, tempdir: str) -> str:
-        quantized = img.quantize(colors=self.colors, method=Image.Quantize.MEDIANCUT)
+    def _convert_color(
+        self,
+        img: Image.Image,
+        output: Path,
+        tempdir: str,
+        profile: dict[str, float | int],
+    ) -> str:
+        quantized = img.quantize(colors=int(profile["colors"]), method=Image.Quantize.MEDIANCUT)
         palette = quantized.getpalette() or []
-        counts = sorted(quantized.getcolors(maxcolors=self.colors * 4) or [], reverse=True)
+        counts = sorted(quantized.getcolors(maxcolors=int(profile["colors"]) * 4) or [], reverse=True)
 
         stderr_parts: list[str] = []
         layers: list[dict[str, object]] = []
@@ -192,7 +259,7 @@ class RasterVectorizer:
             rgb = tuple(palette[index * 3 : index * 3 + 3])
             mask = quantized.point(lambda p, idx=index: 0 if p == idx else 255, mode="L")
             mask = mask.filter(ImageFilter.MedianFilter(size=3))
-            paths, stderr = self._trace_mask(mask, tempdir, f"layer_{index}")
+            paths, stderr = self._trace_mask(mask, tempdir, f"layer_{index}", profile)
             stderr_parts.append(stderr)
             if paths:
                 layers.append({"count": count, "color": rgb, "paths": paths})
@@ -239,6 +306,45 @@ class RasterVectorizer:
         r, g, b = color[:3]
         return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
+    def _conversion_profiles(self) -> list[dict[str, float | int]]:
+        dimensions = [
+            self.max_dimension,
+            max(self.min_dimension, int(self.max_dimension * 0.75)),
+            max(self.min_dimension, int(self.max_dimension * 0.5)),
+            self.min_dimension,
+        ]
+        colors = [
+            self.colors,
+            max(self.min_colors, min(self.colors, 6)),
+            max(self.min_colors, min(self.colors, 4)),
+            self.min_colors,
+        ]
+        profiles: list[dict[str, float | int]] = []
+        seen: set[tuple[int, int, int, float]] = set()
+        for max_dimension, color_count in zip(dimensions, colors):
+            profile = {
+                "max_dimension": max_dimension,
+                "colors": color_count,
+                "turdsize": max(self.turdsize, 8 + len(profiles) * 4),
+                "opttolerance": max(self.opttolerance, 0.2 + len(profiles) * 0.2),
+            }
+            key = (
+                int(profile["max_dimension"]),
+                int(profile["colors"]),
+                int(profile["turdsize"]),
+                float(profile["opttolerance"]),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            profiles.append(profile)
+        return profiles
+
+    def _svg_path_data_chars(self, path: Path) -> int:
+        if not path.exists():
+            return self.max_path_data_chars + 1
+        return sum(len(d) for d in self._path_data_from_svg(path))
+
     def _run(self, command: list[str], failure_message: str) -> subprocess.CompletedProcess[str]:
         try:
             completed = subprocess.run(
@@ -279,16 +385,23 @@ class RasterVectorizer:
             return False, completed.stderr
         return True, None
 
-    def _build_potrace_command(self, bitmap_path: Path, svg_path: Path) -> list[str]:
+    def _build_potrace_command(
+        self,
+        bitmap_path: Path,
+        svg_path: Path,
+        *,
+        turdsize: int | None = None,
+        opttolerance: float | None = None,
+    ) -> list[str]:
         return [
             self.potrace_path,
             str(bitmap_path),
             "--svg",
             "--flat",
             "--turdsize",
-            str(self.turdsize),
+            str(turdsize if turdsize is not None else self.turdsize),
             "--opttolerance",
-            str(self.opttolerance),
+            str(opttolerance if opttolerance is not None else self.opttolerance),
             "-o",
             str(svg_path),
         ]

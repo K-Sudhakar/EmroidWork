@@ -71,6 +71,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         preserve_background=settings.raster_preserve_background,
         turdsize=settings.raster_turdsize,
         opttolerance=settings.raster_opttolerance,
+        max_path_data_chars=settings.raster_max_path_data_chars,
+        min_dimension=settings.raster_min_dimension,
+        min_colors=settings.raster_min_colors,
     )
     design_validator = SvgDesignValidator(
         max_width_mm=settings.design_max_width_mm,

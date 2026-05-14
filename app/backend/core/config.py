@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     raster_preserve_background: bool = False
     raster_turdsize: int = Field(default=8, ge=0)
     raster_opttolerance: float = Field(default=0.2, ge=0)
+    raster_max_path_data_chars: int = Field(default=180000, ge=1)
+    raster_min_dimension: int = Field(default=192, ge=64)
+    raster_min_colors: int = Field(default=2, ge=1, le=24)
     svg_preflight_max_elements: int = Field(default=5000, ge=1)
     svg_preflight_max_paths: int = Field(default=2000, ge=1)
     svg_preflight_max_path_data_chars: int = Field(default=250000, ge=1)

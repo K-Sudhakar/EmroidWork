@@ -57,6 +57,9 @@ RASTER_BACKGROUND_TOLERANCE=0
 RASTER_PRESERVE_BACKGROUND=false
 RASTER_TURDSIZE=8
 RASTER_OPTTOLERANCE=0.2
+RASTER_MAX_PATH_DATA_CHARS=180000
+RASTER_MIN_DIMENSION=192
+RASTER_MIN_COLORS=2
 SVG_PREFLIGHT_MAX_ELEMENTS=5000
 SVG_PREFLIGHT_MAX_PATHS=2000
 SVG_PREFLIGHT_MAX_PATH_DATA_CHARS=250000
@@ -80,7 +83,7 @@ EMBROIDERY_RUNNING_STITCH_REPEATS=1
 EMBROIDERY_LOCK_STITCHES=true
 ```
 
-The MVP supports `output_format=dst`. PES is represented in the model for future extension but is rejected until implemented. Raster inputs are auto-traced with Pillow preprocessing and Potrace path tracing. By default, raster images are quantized into a small number of color layers before tracing; use `RASTER_VECTORIZE_MODE=bw` for simple one-color silhouettes or line art. Production embroidery quality is still best with clean SVG paths.
+The MVP supports `output_format=dst`. PES is represented in the model for future extension but is rejected until implemented. Raster inputs are auto-traced with Pillow preprocessing and Potrace path tracing. By default, raster images are quantized into a small number of color layers before tracing. If the first trace is too complex, the backend retries with fewer colors, smaller dimensions, and stronger Potrace simplification before handing the SVG to Ink/Stitch. Use `RASTER_VECTORIZE_MODE=bw` for simple one-color silhouettes or line art. Production embroidery quality is still best with clean SVG paths.
 
 Before Ink/Stitch export, the worker writes a prepared SVG copy with explicit Ink/Stitch parameters. Filled paths are marked for auto-fill with configurable row spacing, maximum stitch length, underlay, and lock stitches. Stroked paths are marked with configurable running-stitch length, repeat count, and lock stitches. Existing `inkstitch:*` attributes in an uploaded SVG are preserved, so hand-digitized SVG settings are not overwritten.
 
