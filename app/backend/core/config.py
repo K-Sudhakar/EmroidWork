@@ -18,10 +18,18 @@ class Settings(BaseSettings):
     inkstitch_ext_path: Path | None = Path("/root/.config/inkscape/extensions")
     inkstitch_bin_path: Path | None = None
     inkstitch_timeout_seconds: int = Field(default=300, ge=1)
+    inkstitch_max_timeout_seconds: int = Field(default=900, ge=1)
     imagemagick_path: str = "convert"
     potrace_path: str = "potrace"
     raster_vectorize_timeout_seconds: int = Field(default=120, ge=1)
     raster_max_dimension: int = Field(default=512, ge=64)
+    raster_vectorize_mode: str = "color"
+    raster_vectorize_threshold: int = Field(default=160, ge=0, le=255)
+    raster_vectorize_colors: int = Field(default=8, ge=1, le=24)
+    raster_background_tolerance: int = Field(default=0, ge=0)
+    raster_preserve_background: bool = False
+    raster_turdsize: int = Field(default=8, ge=0)
+    raster_opttolerance: float = Field(default=0.2, ge=0)
     svg_preflight_max_elements: int = Field(default=5000, ge=1)
     svg_preflight_max_paths: int = Field(default=2000, ge=1)
     svg_preflight_max_path_data_chars: int = Field(default=250000, ge=1)

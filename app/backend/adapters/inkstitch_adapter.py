@@ -1,16 +1,19 @@
 import logging
+import math
 import os
 import shutil
 import subprocess
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 from app.backend.core.errors import DependencyAppError
 from app.backend.models.job import OutputFormat
 
 logger = logging.getLogger(__name__)
 _INVALID_ARCHIVE_PREVIEW_BYTES = 2048
+_SVG_NAMESPACE = "{http://www.w3.org/2000/svg}"
 
 
 @dataclass(frozen=True)
@@ -48,11 +51,13 @@ class InkstitchAdapter:
         extension_path: Path | None,
         inkstitch_bin_path: Path | None,
         timeout_seconds: int,
+        max_timeout_seconds: int | None = None,
     ) -> None:
         self.inkscape_path = inkscape_path
         self.extension_path = extension_path
         self.inkstitch_bin_path = inkstitch_bin_path
         self.timeout_seconds = timeout_seconds
+        self.max_timeout_seconds = max_timeout_seconds or timeout_seconds
 
     def validate_dependencies(self) -> None:
         try:
@@ -137,7 +142,11 @@ class InkstitchAdapter:
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         command = self._build_zip_export_command(binary, input_path)
-        logger.info("Starting Ink/Stitch conversion", extra={"input_path": str(input_path)})
+        timeout_seconds = self._estimate_timeout_seconds(input_path)
+        logger.info(
+            "Starting Ink/Stitch conversion",
+            extra={"input_path": str(input_path), "timeout_seconds": timeout_seconds},
+        )
 
         try:
             with temp_zip_path.open("wb") as zip_output:
@@ -146,7 +155,7 @@ class InkstitchAdapter:
                     stdout=zip_output,
                     stderr=subprocess.PIPE,
                     text=False,
-                    timeout=self.timeout_seconds,
+                    timeout=timeout_seconds,
                     check=False,
                     env=self._subprocess_env(),
                 )
@@ -156,7 +165,7 @@ class InkstitchAdapter:
             if isinstance(stderr, bytes):
                 stderr = stderr.decode("utf-8", errors="replace")
             raise InkstitchExecutionError(
-                f"Ink/Stitch conversion timed out after {self.timeout_seconds} seconds.",
+                f"Ink/Stitch conversion timed out after {timeout_seconds} seconds.",
                 stderr=stderr,
                 timed_out=True,
             ) from exc
@@ -226,6 +235,29 @@ class InkstitchAdapter:
             str(input_path),
         ]
 
+    def _estimate_timeout_seconds(self, input_path: Path) -> int:
+        max_timeout = max(self.timeout_seconds, self.max_timeout_seconds)
+        try:
+            file_size = input_path.stat().st_size
+            root = ET.parse(input_path).getroot()
+        except (OSError, ET.ParseError):
+            return self.timeout_seconds
+
+        path_count = 0
+        path_data_chars = 0
+        for element in root.iter():
+            if _local_name(element.tag) != "path":
+                continue
+            path_count += 1
+            path_data_chars += len(element.attrib.get("d", ""))
+
+        extra_seconds = (
+            math.ceil(max(0, path_count - 250) / 250) * 60
+            + math.ceil(max(0, path_data_chars - 100_000) / 100_000) * 60
+            + math.ceil(max(0, file_size - 1_000_000) / 1_000_000) * 30
+        )
+        return min(max_timeout, self.timeout_seconds + extra_seconds)
+
     @staticmethod
     def _extract_format_from_zip(
         *,
@@ -274,3 +306,11 @@ def _preview_file(path: Path) -> str:
     except OSError:
         return ""
     return data.decode("utf-8", errors="replace").strip()
+
+
+def _local_name(tag: str) -> str:
+    if tag.startswith(_SVG_NAMESPACE):
+        return tag.removeprefix(_SVG_NAMESPACE)
+    if "}" in tag:
+        return tag.rsplit("}", 1)[1]
+    return tag

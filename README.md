@@ -45,10 +45,18 @@ INKSCAPE_PATH=inkscape
 INKSTITCH_EXT_PATH=/root/.config/inkscape/extensions
 INKSTITCH_BIN_PATH=/root/.config/inkscape/extensions/inkstitch/bin/inkstitch
 INKSTITCH_TIMEOUT_SECONDS=300
+INKSTITCH_MAX_TIMEOUT_SECONDS=900
 IMAGEMAGICK_PATH=convert
 POTRACE_PATH=potrace
 RASTER_VECTORIZE_TIMEOUT_SECONDS=120
 RASTER_MAX_DIMENSION=512
+RASTER_VECTORIZE_MODE=color
+RASTER_VECTORIZE_THRESHOLD=160
+RASTER_VECTORIZE_COLORS=8
+RASTER_BACKGROUND_TOLERANCE=0
+RASTER_PRESERVE_BACKGROUND=false
+RASTER_TURDSIZE=8
+RASTER_OPTTOLERANCE=0.2
 SVG_PREFLIGHT_MAX_ELEMENTS=5000
 SVG_PREFLIGHT_MAX_PATHS=2000
 SVG_PREFLIGHT_MAX_PATH_DATA_CHARS=250000
@@ -72,13 +80,13 @@ EMBROIDERY_RUNNING_STITCH_REPEATS=1
 EMBROIDERY_LOCK_STITCHES=true
 ```
 
-The MVP supports `output_format=dst`. PES is represented in the model for future extension but is rejected until implemented. Raster inputs are auto-traced for simple logo-style images; production embroidery quality is still best with clean SVG paths.
+The MVP supports `output_format=dst`. PES is represented in the model for future extension but is rejected until implemented. Raster inputs are auto-traced with Pillow preprocessing and Potrace path tracing. By default, raster images are quantized into a small number of color layers before tracing; use `RASTER_VECTORIZE_MODE=bw` for simple one-color silhouettes or line art. Production embroidery quality is still best with clean SVG paths.
 
 Before Ink/Stitch export, the worker writes a prepared SVG copy with explicit Ink/Stitch parameters. Filled paths are marked for auto-fill with configurable row spacing, maximum stitch length, underlay, and lock stitches. Stroked paths are marked with configurable running-stitch length, repeat count, and lock stitches. Existing `inkstitch:*` attributes in an uploaded SVG are preserved, so hand-digitized SVG settings are not overwritten.
 
 The worker also validates embroidery-specific constraints before and after export. Prepared SVGs must define a real design size through `width`/`height` or `viewBox`, stay within the configured hoop limits, and avoid excessive tiny path geometry. Generated DST files are parsed before completion to reject malformed files, empty stitch output, excessive stitch counts, and output dimensions outside the configured hoop limits.
 
-SVG inputs are preflighted before Ink/Stitch runs. The preflight rejects documents with excessive element counts, excessive path counts, very large path data, oversized dimensions, or embedded raster images. This keeps one pathological SVG from consuming the worker until the hard Ink/Stitch timeout. Increase `INKSTITCH_TIMEOUT_SECONDS` for genuinely large valid designs; increase the `SVG_PREFLIGHT_*` limits only when the worker has enough CPU/RAM and the input source is trusted.
+SVG inputs are preflighted before Ink/Stitch runs. The preflight rejects documents with excessive element counts, excessive path counts, very large path data, oversized dimensions, or embedded raster images. This keeps one pathological SVG from consuming the worker until the hard Ink/Stitch timeout. Ink/Stitch export starts with `INKSTITCH_TIMEOUT_SECONDS` and automatically increases for SVGs with more paths, path data, or file size, capped by `INKSTITCH_MAX_TIMEOUT_SECONDS`. Increase the `SVG_PREFLIGHT_*` limits only when the worker has enough CPU/RAM and the input source is trusted.
 
 ## Run With Docker
 
@@ -100,7 +108,7 @@ If your environment needs a different asset URL, add `INKSTITCH_DOWNLOAD_URL` as
 
 ## Run Locally
 
-Local conversion requires Inkscape, Ink/Stitch, ImageMagick, and Potrace to be installed on the host. For API-only development and unit tests, these system tools are not required.
+Local conversion requires Inkscape, Ink/Stitch, and Potrace to be installed on the host. ImageMagick is still installed in the Docker image for compatibility and diagnostics, but raster vectorization uses Pillow and Potrace. For API-only development and unit tests, these system tools are not required.
 
 ```bash
 python -m venv .venv

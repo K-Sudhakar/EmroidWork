@@ -122,3 +122,38 @@ def test_convert_timeout_includes_configured_limit_and_cleans_temp_zip(
         assert not temp_zip_path.exists()
     else:
         raise AssertionError("Expected InkstitchExecutionError")
+
+
+def test_estimate_timeout_uses_base_for_simple_svg(tmp_path):
+    input_path = tmp_path / "input.svg"
+    input_path.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0 L1 1"/></svg>',
+        encoding="utf-8",
+    )
+    adapter = InkstitchAdapter(
+        inkscape_path="python",
+        extension_path=tmp_path,
+        inkstitch_bin_path=tmp_path / "inkstitch",
+        timeout_seconds=300,
+        max_timeout_seconds=900,
+    )
+
+    assert adapter._estimate_timeout_seconds(input_path) == 300
+
+
+def test_estimate_timeout_scales_with_svg_complexity_and_respects_cap(tmp_path):
+    input_path = tmp_path / "input.svg"
+    paths = "".join('<path d="{}"/>'.format("M0 0 " * 2000) for _ in range(300))
+    input_path.write_text(
+        f'<svg xmlns="http://www.w3.org/2000/svg">{paths}</svg>',
+        encoding="utf-8",
+    )
+    adapter = InkstitchAdapter(
+        inkscape_path="python",
+        extension_path=tmp_path,
+        inkstitch_bin_path=tmp_path / "inkstitch",
+        timeout_seconds=300,
+        max_timeout_seconds=420,
+    )
+
+    assert adapter._estimate_timeout_seconds(input_path) == 420

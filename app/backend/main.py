@@ -57,12 +57,20 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         extension_path=settings.inkstitch_ext_path,
         inkstitch_bin_path=settings.inkstitch_bin_path,
         timeout_seconds=settings.inkstitch_timeout_seconds,
+        max_timeout_seconds=settings.inkstitch_max_timeout_seconds,
     )
     vectorizer = RasterVectorizer(
         imagemagick_path=settings.imagemagick_path,
         potrace_path=settings.potrace_path,
         timeout_seconds=settings.raster_vectorize_timeout_seconds,
         max_dimension=settings.raster_max_dimension,
+        mode=settings.raster_vectorize_mode,
+        threshold=settings.raster_vectorize_threshold,
+        colors=settings.raster_vectorize_colors,
+        background_tolerance=settings.raster_background_tolerance,
+        preserve_background=settings.raster_preserve_background,
+        turdsize=settings.raster_turdsize,
+        opttolerance=settings.raster_opttolerance,
     )
     design_validator = SvgDesignValidator(
         max_width_mm=settings.design_max_width_mm,
