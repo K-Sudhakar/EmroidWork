@@ -141,7 +141,7 @@ class InkstitchAdapter:
         temp_zip_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        command = self._build_zip_export_command(binary, input_path)
+        command = self._build_export_execution_command(binary, input_path)
         timeout_seconds = self._estimate_timeout_seconds(input_path)
         logger.info(
             "Starting Ink/Stitch conversion",
@@ -233,6 +233,17 @@ class InkstitchAdapter:
             "--extension=zip",
             "--format-dst=True",
             str(input_path),
+        ]
+
+    def _build_export_execution_command(self, binary: Path, input_path: Path) -> list[str]:
+        command = self._build_zip_export_command(binary, input_path)
+        if shutil.which("xvfb-run") is None:
+            return command
+        return [
+            "xvfb-run",
+            "--auto-servernum",
+            "--server-args=-screen 0 1024x768x24",
+            *command,
         ]
 
     def _estimate_timeout_seconds(self, input_path: Path) -> int:

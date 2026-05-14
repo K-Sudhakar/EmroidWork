@@ -19,6 +19,56 @@ def test_build_zip_export_command(tmp_path):
     ]
 
 
+def test_build_export_execution_command_wraps_with_xvfb_when_available(tmp_path, monkeypatch):
+    monkeypatch.setattr(inkstitch_adapter_module.shutil, "which", lambda name: name)
+    adapter = InkstitchAdapter(
+        inkscape_path="python",
+        extension_path=tmp_path,
+        inkstitch_bin_path=tmp_path / "inkstitch",
+        timeout_seconds=1,
+    )
+
+    command = adapter._build_export_execution_command(
+        tmp_path / "inkstitch",
+        tmp_path / "input.svg",
+    )
+
+    assert command == [
+        "xvfb-run",
+        "--auto-servernum",
+        "--server-args=-screen 0 1024x768x24",
+        str(tmp_path / "inkstitch"),
+        "--extension=zip",
+        "--format-dst=True",
+        str(tmp_path / "input.svg"),
+    ]
+
+
+def test_build_export_execution_command_uses_direct_command_without_xvfb(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setattr(inkstitch_adapter_module.shutil, "which", lambda _name: None)
+    adapter = InkstitchAdapter(
+        inkscape_path="python",
+        extension_path=tmp_path,
+        inkstitch_bin_path=tmp_path / "inkstitch",
+        timeout_seconds=1,
+    )
+
+    command = adapter._build_export_execution_command(
+        tmp_path / "inkstitch",
+        tmp_path / "input.svg",
+    )
+
+    assert command == [
+        str(tmp_path / "inkstitch"),
+        "--extension=zip",
+        "--format-dst=True",
+        str(tmp_path / "input.svg"),
+    ]
+
+
 def test_extract_dst_from_zip(tmp_path):
     zip_path = tmp_path / "result.zip"
     output_path = tmp_path / "output.dst"

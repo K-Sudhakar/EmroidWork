@@ -33,6 +33,7 @@ RUN apt-get update \
         libxtst6 \
         potrace \
         unzip \
+        xvfb \
         xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
