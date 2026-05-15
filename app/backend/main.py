@@ -84,6 +84,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         max_tiny_paths=settings.design_max_tiny_paths,
     )
     embroidery_preparer = SvgEmbroideryPreparer(
+        inkscape_path=settings.inkscape_path,
+        normalize_with_inkscape=settings.svg_normalize_with_inkscape,
         fill_row_spacing_mm=settings.embroidery_fill_row_spacing_mm,
         fill_max_stitch_length_mm=settings.embroidery_fill_max_stitch_length_mm,
         fill_underlay=settings.embroidery_fill_underlay,

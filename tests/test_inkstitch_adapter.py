@@ -15,6 +15,7 @@ def test_build_zip_export_command(tmp_path):
         str(tmp_path / "inkstitch"),
         "--extension=zip",
         "--format-dst=True",
+        "--format-threadlist=True",
         str(tmp_path / "input.svg"),
     ]
 
@@ -40,6 +41,7 @@ def test_build_export_execution_command_wraps_with_xvfb_when_available(tmp_path,
         str(tmp_path / "inkstitch"),
         "--extension=zip",
         "--format-dst=True",
+        "--format-threadlist=True",
         str(tmp_path / "input.svg"),
     ]
 
@@ -65,6 +67,7 @@ def test_build_export_execution_command_uses_direct_command_without_xvfb(
         str(tmp_path / "inkstitch"),
         "--extension=zip",
         "--format-dst=True",
+        "--format-threadlist=True",
         str(tmp_path / "input.svg"),
     ]
 
@@ -82,6 +85,22 @@ def test_extract_dst_from_zip(tmp_path):
     )
 
     assert output_path.read_bytes() == b"dst-bytes"
+
+
+def test_extract_optional_thread_list_from_zip(tmp_path):
+    zip_path = tmp_path / "result.zip"
+    output_path = tmp_path / "output.threadlist.txt"
+    with zipfile.ZipFile(zip_path, "w") as archive:
+        archive.writestr("design.txt", b"thread-list")
+
+    extracted = InkstitchAdapter._extract_optional_extension_from_zip(
+        zip_path=zip_path,
+        output_path=output_path,
+        extensions=(".txt",),
+    )
+
+    assert extracted is True
+    assert output_path.read_bytes() == b"thread-list"
 
 
 def test_extract_dst_from_invalid_zip_includes_output_preview(tmp_path):

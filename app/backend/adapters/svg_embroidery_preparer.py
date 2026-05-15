@@ -1,3 +1,5 @@
+import logging
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from xml.etree import ElementTree
@@ -6,6 +8,8 @@ from xml.etree import ElementTree
 INKSTITCH_NAMESPACE = "http://inkstitch.org/namespace"
 SVG_NAMESPACE = "http://www.w3.org/2000/svg"
 _INKSTITCH_ATTR_PREFIX = f"{{{INKSTITCH_NAMESPACE}}}"
+_INKSCAPE_NORMALIZE_TIMEOUT_SECONDS = 60
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -13,12 +17,22 @@ class EmbroideryPreparationResult:
     svg_path: Path
     fill_paths: int
     stroke_paths: int
+    converted_with_inkscape: bool
+
+
+class SvgEmbroideryPreparationError(Exception):
+    def __init__(self, message: str, *, stderr: str = "") -> None:
+        super().__init__(message)
+        self.message = message
+        self.stderr = stderr
 
 
 class SvgEmbroideryPreparer:
     def __init__(
         self,
         *,
+        inkscape_path: str | None = None,
+        normalize_with_inkscape: bool = False,
         fill_row_spacing_mm: float = 0.4,
         fill_max_stitch_length_mm: float = 4.0,
         fill_underlay: bool = True,
@@ -28,6 +42,8 @@ class SvgEmbroideryPreparer:
         running_stitch_repeats: int = 1,
         lock_stitches: bool = True,
     ) -> None:
+        self.inkscape_path = inkscape_path
+        self.normalize_with_inkscape = normalize_with_inkscape
         self.fill_row_spacing_mm = fill_row_spacing_mm
         self.fill_max_stitch_length_mm = fill_max_stitch_length_mm
         self.fill_underlay = fill_underlay
@@ -41,7 +57,19 @@ class SvgEmbroideryPreparer:
         ElementTree.register_namespace("", SVG_NAMESPACE)
         ElementTree.register_namespace("inkstitch", INKSTITCH_NAMESPACE)
 
-        tree = ElementTree.parse(input_path)
+        converted_with_inkscape = False
+        parse_path = input_path
+        if self.normalize_with_inkscape and self.inkscape_path:
+            self._normalize_svg_with_inkscape(input_path=input_path, output_path=output_path)
+            parse_path = output_path
+            converted_with_inkscape = True
+
+        try:
+            tree = ElementTree.parse(parse_path)
+        except ElementTree.ParseError as exc:
+            raise SvgEmbroideryPreparationError(
+                "Prepared SVG is not well-formed XML after path normalization."
+            ) from exc
         root = tree.getroot()
         fill_paths = 0
         stroke_paths = 0
@@ -63,6 +91,7 @@ class SvgEmbroideryPreparer:
             svg_path=output_path,
             fill_paths=fill_paths,
             stroke_paths=stroke_paths,
+            converted_with_inkscape=converted_with_inkscape,
         )
 
     def _apply_fill_parameters(self, element: ElementTree.Element) -> None:
@@ -108,6 +137,50 @@ class SvgEmbroideryPreparer:
             str(self.running_stitch_repeats),
         )
         _setdefault_inkstitch_attr(element, "ties", _format_bool(self.lock_stitches))
+
+    def _normalize_svg_with_inkscape(self, *, input_path: Path, output_path: Path) -> None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        command = [
+            self.inkscape_path or "inkscape",
+            str(input_path),
+            f"--export-plain-svg={output_path}",
+            "--export-overwrite",
+            "--actions=select-all;object-to-path;stroke-to-path;vacuum-defs",
+        ]
+        logger.info(
+            "Normalizing SVG paths with Inkscape",
+            extra={"input_path": str(input_path), "output_path": str(output_path)},
+        )
+        try:
+            completed = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=_INKSCAPE_NORMALIZE_TIMEOUT_SECONDS,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise SvgEmbroideryPreparationError(
+                "Inkscape SVG path normalization timed out.",
+                stderr=(exc.stderr or ""),
+            ) from exc
+        except OSError as exc:
+            raise SvgEmbroideryPreparationError(
+                "Inkscape is not available for SVG path normalization. Check INKSCAPE_PATH.",
+                stderr=str(exc),
+            ) from exc
+
+        if completed.returncode != 0:
+            output_path.unlink(missing_ok=True)
+            raise SvgEmbroideryPreparationError(
+                "Inkscape failed to normalize SVG objects to paths.",
+                stderr=completed.stderr,
+            )
+        if not output_path.exists() or output_path.stat().st_size == 0:
+            raise SvgEmbroideryPreparationError(
+                "Inkscape path normalization did not generate an SVG output.",
+                stderr=completed.stderr,
+            )
 
 
 def _setdefault_inkstitch_attr(

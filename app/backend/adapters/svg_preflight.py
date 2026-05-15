@@ -14,9 +14,11 @@ class SvgPreflightReport:
     element_count: int
     path_count: int
     path_data_chars: int
+    shape_count: int
     width: float | None
     height: float | None
     has_embedded_image: bool
+    has_external_image: bool
 
 
 class SvgPreflight:
@@ -62,20 +64,33 @@ class SvgPreflight:
                 "SVG height is too large for conversion: "
                 f"{report.height:g} exceeds the limit of {self.max_dimension}."
             )
-        if report.has_embedded_image and not self.allow_embedded_images:
+        if (report.has_embedded_image or report.has_external_image) and not self.allow_embedded_images:
             raise SvgPreflightError(
-                "SVG contains embedded raster images. Upload the raster image directly or "
-                "convert it to clean vector paths before requesting embroidery conversion."
+                "SVG contains raster image elements instead of clean vector paths. Upload the "
+                "raster image directly for tracing or convert it to cleaned vector paths before "
+                "requesting embroidery conversion."
+            )
+        if report.path_count == 0 and report.shape_count == 0:
+            raise SvgPreflightError(
+                "SVG does not contain stitchable vector geometry. Add paths or basic vector "
+                "shapes before requesting embroidery conversion."
             )
         return report
 
     def inspect(self, path: Path) -> SvgPreflightReport:
+        if not path.exists():
+            raise SvgPreflightError(f"Input SVG does not exist: {path}")
+        if not path.is_file():
+            raise SvgPreflightError(f"Input SVG is not a file: {path}")
+
         element_count = 0
         path_count = 0
         path_data_chars = 0
+        shape_count = 0
         width: float | None = None
         height: float | None = None
         has_embedded_image = False
+        has_external_image = False
 
         try:
             for _event, element in ElementTree.iterparse(path, events=("start",)):
@@ -90,8 +105,20 @@ class SvgPreflight:
                 if tag == "path":
                     path_count += 1
                     path_data_chars += len(element.attrib.get("d", ""))
+                elif tag in {"circle", "ellipse", "line", "polygon", "polyline", "rect", "text"}:
+                    shape_count += 1
                 elif tag == "image":
-                    has_embedded_image = True
+                    href = (
+                        element.attrib.get("href")
+                        or element.attrib.get("{http://www.w3.org/1999/xlink}href")
+                        or ""
+                    ).strip()
+                    if href.lower().startswith("data:image/"):
+                        has_embedded_image = True
+                    else:
+                        has_external_image = True
+        except OSError as exc:
+            raise SvgPreflightError(f"Could not read input SVG: {path}") from exc
         except ElementTree.ParseError as exc:
             raise SvgPreflightError("Uploaded file is not well-formed XML/SVG.") from exc
 
@@ -99,9 +126,11 @@ class SvgPreflight:
             element_count=element_count,
             path_count=path_count,
             path_data_chars=path_data_chars,
+            shape_count=shape_count,
             width=width,
             height=height,
             has_embedded_image=has_embedded_image,
+            has_external_image=has_external_image,
         )
 
     def _dimension_exceeds_limit(self, value: float | None) -> bool:

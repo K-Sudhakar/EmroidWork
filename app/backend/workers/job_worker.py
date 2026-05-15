@@ -7,7 +7,10 @@ from app.backend.adapters.dst_validator import DstValidationError, DstValidator
 from app.backend.adapters.inkstitch_adapter import InkstitchAdapter, InkstitchExecutionError
 from app.backend.adapters.raster_vectorizer import RasterVectorizationError, RasterVectorizer
 from app.backend.adapters.svg_design_validator import SvgDesignValidationError, SvgDesignValidator
-from app.backend.adapters.svg_embroidery_preparer import SvgEmbroideryPreparer
+from app.backend.adapters.svg_embroidery_preparer import (
+    SvgEmbroideryPreparationError,
+    SvgEmbroideryPreparer,
+)
 from app.backend.adapters.svg_preflight import SvgPreflight, SvgPreflightError
 from app.backend.models.job import InputFormat, JobStatus
 from app.backend.storage.job_repository import JsonJobRepository
@@ -151,6 +154,17 @@ class JobWorker:
                     error_message=exc.message,
                 )
             )
+        except SvgEmbroideryPreparationError as exc:
+            logger.error(
+                "Job SVG preparation failed",
+                extra={"job_id": job_id, "error": exc.message, "stderr": exc.stderr[:1000]},
+            )
+            self.repository.update(
+                job.with_status(
+                    JobStatus.FAILED,
+                    error_message=_format_preparation_error(exc),
+                )
+            )
         except SvgDesignValidationError as exc:
             logger.error(
                 "Job SVG design validation failed",
@@ -184,6 +198,7 @@ class JobWorker:
     def _prepare_conversion_input(self, job_id: str) -> Path:
         job = self.repository.get(job_id)
         if job.input_format == InputFormat.SVG:
+            self.svg_preflight.validate(job.input_path)
             return self._prepare_inkstitch_svg(job_id, job.input_path)
 
         svg_path = self.storage.temp_path_for(job_id, f"{job_id}.svg")
@@ -216,6 +231,15 @@ def _format_conversion_error(exc: InkstitchExecutionError) -> str:
 
 
 def _format_vectorization_error(exc: RasterVectorizationError) -> str:
+    detail = " ".join((exc.stderr or "").split())
+    if not detail:
+        return exc.message
+    if len(detail) > _MAX_ERROR_DETAIL_LENGTH:
+        detail = f"{detail[:_MAX_ERROR_DETAIL_LENGTH]}..."
+    return f"{exc.message} Detail: {detail}"
+
+
+def _format_preparation_error(exc: SvgEmbroideryPreparationError) -> str:
     detail = " ".join((exc.stderr or "").split())
     if not detail:
         return exc.message

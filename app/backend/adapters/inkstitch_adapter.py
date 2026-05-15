@@ -19,6 +19,7 @@ _SVG_NAMESPACE = "{http://www.w3.org/2000/svg}"
 @dataclass(frozen=True)
 class ConversionResult:
     output_path: Path
+    thread_list_path: Path | None
     stdout: str
     stderr: str
     exit_code: int
@@ -128,6 +129,7 @@ class InkstitchAdapter:
         output_path: Path,
         output_format: OutputFormat,
         temp_zip_path: Path,
+        thread_list_path: Path | None = None,
     ) -> ConversionResult:
         if output_format != OutputFormat.DST:
             raise InkstitchExecutionError(f"Unsupported output format: {output_format}")
@@ -140,6 +142,8 @@ class InkstitchAdapter:
 
         temp_zip_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        thread_list_path = thread_list_path or output_path.with_suffix(".threadlist.txt")
+        thread_list_path.parent.mkdir(parents=True, exist_ok=True)
 
         command = self._build_export_execution_command(binary, input_path)
         timeout_seconds = self._estimate_timeout_seconds(input_path)
@@ -187,6 +191,11 @@ class InkstitchAdapter:
                 output_path=output_path,
                 output_format=output_format,
             )
+            self._extract_optional_extension_from_zip(
+                zip_path=temp_zip_path,
+                output_path=thread_list_path,
+                extensions=(".txt", ".threadlist"),
+            )
         except InkstitchExecutionError as exc:
             temp_zip_path.unlink(missing_ok=True)
             raise InkstitchExecutionError(
@@ -195,9 +204,17 @@ class InkstitchAdapter:
                 stderr=stderr,
                 exit_code=completed.returncode,
             ) from exc
+        if not output_path.exists() or output_path.stat().st_size == 0:
+            temp_zip_path.unlink(missing_ok=True)
+            raise InkstitchExecutionError(
+                "Ink/Stitch completed but DST output was not generated.",
+                stderr=stderr,
+                exit_code=completed.returncode,
+            )
         temp_zip_path.unlink(missing_ok=True)
         return ConversionResult(
             output_path=output_path,
+            thread_list_path=thread_list_path if thread_list_path.exists() else None,
             stdout=f"Wrote export archive to {temp_zip_path.name}",
             stderr=stderr,
             exit_code=completed.returncode,
@@ -232,6 +249,7 @@ class InkstitchAdapter:
             str(binary),
             "--extension=zip",
             "--format-dst=True",
+            "--format-threadlist=True",
             str(input_path),
         ]
 
@@ -303,6 +321,33 @@ class InkstitchAdapter:
                 "Ink/Stitch did not return a valid zip export archive.",
                 stdout=_preview_file(zip_path),
             ) from exc
+
+    @staticmethod
+    def _extract_optional_extension_from_zip(
+        *,
+        zip_path: Path,
+        output_path: Path,
+        extensions: tuple[str, ...],
+    ) -> bool:
+        if not zipfile.is_zipfile(zip_path):
+            return False
+        try:
+            with zipfile.ZipFile(zip_path) as archive:
+                match = next(
+                    (
+                        name
+                        for name in archive.namelist()
+                        if name.lower().endswith(extensions)
+                    ),
+                    None,
+                )
+                if match is None:
+                    return False
+                with archive.open(match) as source, output_path.open("wb") as destination:
+                    shutil.copyfileobj(source, destination)
+                return output_path.exists() and output_path.stat().st_size > 0
+        except zipfile.BadZipFile:
+            return False
 
     @staticmethod
     def _subprocess_env() -> dict[str, str]:

@@ -1,9 +1,13 @@
+import subprocess
 from xml.etree import ElementTree
 
+import app.backend.adapters.svg_embroidery_preparer as preparer_module
 from app.backend.adapters.svg_embroidery_preparer import (
     INKSTITCH_NAMESPACE,
+    SvgEmbroideryPreparationError,
     SvgEmbroideryPreparer,
 )
+import pytest
 
 
 INK = f"{{{INKSTITCH_NAMESPACE}}}"
@@ -112,3 +116,60 @@ def test_prepare_does_not_fill_open_stroke_path_without_fill_attribute(tmp_path)
 
     assert result.fill_paths == 0
     assert result.stroke_paths == 1
+
+
+def test_prepare_can_normalize_objects_with_inkscape_before_tagging(tmp_path, monkeypatch):
+    input_path = tmp_path / "input.svg"
+    output_path = tmp_path / "prepared.svg"
+    input_path.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>',
+        encoding="utf-8",
+    )
+    calls = []
+
+    def fake_run(command, **_kwargs):
+        calls.append(command)
+        output_arg = next(item for item in command if item.startswith("--export-plain-svg="))
+        normalized_path = output_arg.split("=", 1)[1]
+        ElementTree.ElementTree(
+            ElementTree.fromstring(
+                '<svg xmlns="http://www.w3.org/2000/svg">'
+                '<path d="M0 0 H10 V10 Z" fill="black"/>'
+                "</svg>"
+            )
+        ).write(normalized_path, encoding="utf-8", xml_declaration=True)
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(preparer_module.subprocess, "run", fake_run)
+
+    result = SvgEmbroideryPreparer(
+        inkscape_path="inkscape",
+        normalize_with_inkscape=True,
+    ).prepare(input_path=input_path, output_path=output_path)
+
+    root = ElementTree.parse(output_path).getroot()
+    path = next(root.iter("{http://www.w3.org/2000/svg}path"))
+    assert result.converted_with_inkscape is True
+    assert result.fill_paths == 1
+    assert path.attrib[f"{INK}auto_fill"] == "true"
+    assert calls[0][-1] == "--actions=select-all;object-to-path;stroke-to-path;vacuum-defs"
+
+
+def test_prepare_reports_inkscape_normalization_failure(tmp_path, monkeypatch):
+    input_path = tmp_path / "input.svg"
+    output_path = tmp_path / "prepared.svg"
+    input_path.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>',
+        encoding="utf-8",
+    )
+
+    def fake_run(command, **_kwargs):
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr="bad action")
+
+    monkeypatch.setattr(preparer_module.subprocess, "run", fake_run)
+
+    with pytest.raises(SvgEmbroideryPreparationError, match="failed to normalize"):
+        SvgEmbroideryPreparer(
+            inkscape_path="inkscape",
+            normalize_with_inkscape=True,
+        ).prepare(input_path=input_path, output_path=output_path)

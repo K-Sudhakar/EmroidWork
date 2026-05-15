@@ -21,6 +21,7 @@ def test_preflight_accepts_simple_svg(tmp_path):
     assert report.element_count == 2
     assert report.path_count == 1
     assert report.path_data_chars == 13
+    assert report.shape_count == 0
     assert report.width == 100
     assert report.height == 50
 
@@ -56,13 +57,32 @@ def test_preflight_rejects_oversized_dimensions(tmp_path):
 def test_preflight_rejects_embedded_images(tmp_path):
     path = write_svg(tmp_path, '<svg><image href="data:image/png;base64,abcd"/></svg>')
 
-    with pytest.raises(SvgPreflightError, match="embedded raster images"):
+    with pytest.raises(SvgPreflightError, match="raster image elements"):
         SvgPreflight().validate(path)
 
 
 def test_preflight_can_allow_embedded_images(tmp_path):
-    path = write_svg(tmp_path, '<svg><image href="data:image/png;base64,abcd"/></svg>')
+    path = write_svg(
+        tmp_path,
+        '<svg><path d="M0 0 L10 10"/><image href="data:image/png;base64,abcd"/></svg>',
+    )
 
     report = SvgPreflight(allow_embedded_images=True).validate(path)
 
     assert report.has_embedded_image is True
+
+
+def test_preflight_accepts_basic_shapes_for_inkscape_normalization(tmp_path):
+    path = write_svg(tmp_path, '<svg><rect width="10" height="10"/></svg>')
+
+    report = SvgPreflight().validate(path)
+
+    assert report.path_count == 0
+    assert report.shape_count == 1
+
+
+def test_preflight_rejects_svg_without_vector_geometry(tmp_path):
+    path = write_svg(tmp_path, "<svg><defs/></svg>")
+
+    with pytest.raises(SvgPreflightError, match="does not contain stitchable vector geometry"):
+        SvgPreflight().validate(path)

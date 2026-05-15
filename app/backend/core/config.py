@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     svg_preflight_max_path_data_chars: int = Field(default=250000, ge=1)
     svg_preflight_max_dimension: int = Field(default=10000, ge=1)
     svg_preflight_allow_embedded_images: bool = False
+    svg_normalize_with_inkscape: bool = True
     design_max_width_mm: float = Field(default=100, gt=0)
     design_max_height_mm: float = Field(default=100, gt=0)
     design_min_width_mm: float = Field(default=1, gt=0)
