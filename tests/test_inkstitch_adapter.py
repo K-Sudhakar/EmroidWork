@@ -27,6 +27,7 @@ def test_build_export_execution_command_wraps_with_xvfb_when_available(tmp_path,
         extension_path=tmp_path,
         inkstitch_bin_path=tmp_path / "inkstitch",
         timeout_seconds=1,
+        use_xvfb=True,
     )
 
     command = adapter._build_export_execution_command(
@@ -46,11 +47,11 @@ def test_build_export_execution_command_wraps_with_xvfb_when_available(tmp_path,
     ]
 
 
-def test_build_export_execution_command_uses_direct_command_without_xvfb(
+def test_build_export_execution_command_uses_direct_command_by_default(
     tmp_path,
     monkeypatch,
 ):
-    monkeypatch.setattr(inkstitch_adapter_module.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(inkstitch_adapter_module.shutil, "which", lambda name: name)
     adapter = InkstitchAdapter(
         inkscape_path="python",
         extension_path=tmp_path,

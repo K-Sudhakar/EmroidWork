@@ -129,8 +129,8 @@ def test_prepare_can_normalize_objects_with_inkscape_before_tagging(tmp_path, mo
 
     def fake_run(command, **_kwargs):
         calls.append(command)
-        output_arg = next(item for item in command if item.startswith("--export-plain-svg="))
-        normalized_path = output_arg.split("=", 1)[1]
+        actions_arg = next(item for item in command if item.startswith("--actions="))
+        normalized_path = actions_arg.split("export-filename:", 1)[1].split(";", 1)[0]
         ElementTree.ElementTree(
             ElementTree.fromstring(
                 '<svg xmlns="http://www.w3.org/2000/svg">'
@@ -152,7 +152,8 @@ def test_prepare_can_normalize_objects_with_inkscape_before_tagging(tmp_path, mo
     assert result.converted_with_inkscape is True
     assert result.fill_paths == 1
     assert path.attrib[f"{INK}auto_fill"] == "true"
-    assert calls[0][-1] == "--actions=select-all;object-to-path;stroke-to-path;vacuum-defs"
+    assert calls[0][1] == "--batch-process"
+    assert calls[0][2].startswith("--actions=select-all:all;object-to-path;object-stroke-to-path")
 
 
 def test_prepare_reports_inkscape_normalization_failure(tmp_path, monkeypatch):

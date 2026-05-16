@@ -53,12 +53,14 @@ class InkstitchAdapter:
         inkstitch_bin_path: Path | None,
         timeout_seconds: int,
         max_timeout_seconds: int | None = None,
+        use_xvfb: bool = False,
     ) -> None:
         self.inkscape_path = inkscape_path
         self.extension_path = extension_path
         self.inkstitch_bin_path = inkstitch_bin_path
         self.timeout_seconds = timeout_seconds
         self.max_timeout_seconds = max_timeout_seconds or timeout_seconds
+        self.use_xvfb = use_xvfb
 
     def validate_dependencies(self) -> None:
         try:
@@ -255,7 +257,7 @@ class InkstitchAdapter:
 
     def _build_export_execution_command(self, binary: Path, input_path: Path) -> list[str]:
         command = self._build_zip_export_command(binary, input_path)
-        if shutil.which("xvfb-run") is None:
+        if not self.use_xvfb or shutil.which("xvfb-run") is None:
             return command
         return [
             "xvfb-run",

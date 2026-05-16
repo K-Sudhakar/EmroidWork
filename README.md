@@ -46,6 +46,7 @@ INKSTITCH_EXT_PATH=/root/.config/inkscape/extensions
 INKSTITCH_BIN_PATH=/root/.config/inkscape/extensions/inkstitch/bin/inkstitch
 INKSTITCH_TIMEOUT_SECONDS=300
 INKSTITCH_MAX_TIMEOUT_SECONDS=900
+INKSTITCH_USE_XVFB=false
 IMAGEMAGICK_PATH=convert
 POTRACE_PATH=potrace
 RASTER_VECTORIZE_TIMEOUT_SECONDS=120
@@ -98,7 +99,7 @@ The Ink/Stitch command uses the documented zip export shape:
 inkstitch --extension=zip --format-dst=True --format-threadlist=True input.svg > output.zip
 ```
 
-The backend extracts the `.dst` file from that archive and, when Ink/Stitch includes one, writes a sibling `*.threadlist.txt` file. Job logs include stderr from Inkscape and Ink/Stitch failures so bad SVGs, missing dependencies, and export errors are visible in the job error message.
+The backend runs Ink/Stitch directly by default. Set `INKSTITCH_USE_XVFB=true` only in an environment that specifically requires an Xvfb wrapper. The backend extracts the `.dst` file from that archive and, when Ink/Stitch includes one, writes a sibling `*.threadlist.txt` file. Job logs include stderr from Inkscape and Ink/Stitch failures so bad SVGs, missing dependencies, and export errors are visible in the job error message.
 
 This service does not claim automatic Tajima-level digitizing from arbitrary SVGs. It prepares vector artwork for Ink/Stitch auto-fill/running-stitch export. Final sew quality still depends on artwork cleanup, stitch parameters, fabric, stabilizer, thread, and machine testing.
 

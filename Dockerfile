@@ -10,6 +10,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     INKSCAPE_PATH=inkscape \
     INKSTITCH_EXT_PATH=/root/.config/inkscape/extensions \
     INKSTITCH_BIN_PATH=/root/.config/inkscape/extensions/inkstitch/bin/inkstitch \
+    INKSTITCH_USE_XVFB=false \
     GDK_BACKEND=x11
 
 WORKDIR /service

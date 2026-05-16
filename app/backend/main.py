@@ -58,6 +58,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         inkstitch_bin_path=settings.inkstitch_bin_path,
         timeout_seconds=settings.inkstitch_timeout_seconds,
         max_timeout_seconds=settings.inkstitch_max_timeout_seconds,
+        use_xvfb=settings.inkstitch_use_xvfb,
     )
     vectorizer = RasterVectorizer(
         imagemagick_path=settings.imagemagick_path,

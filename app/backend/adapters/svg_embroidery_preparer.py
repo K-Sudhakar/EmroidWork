@@ -142,10 +142,9 @@ class SvgEmbroideryPreparer:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         command = [
             self.inkscape_path or "inkscape",
+            "--batch-process",
+            f"--actions=select-all:all;object-to-path;object-stroke-to-path;vacuum-defs;export-filename:{output_path};export-plain-svg;export-do",
             str(input_path),
-            f"--export-plain-svg={output_path}",
-            "--export-overwrite",
-            "--actions=select-all;object-to-path;stroke-to-path;vacuum-defs",
         ]
         logger.info(
             "Normalizing SVG paths with Inkscape",

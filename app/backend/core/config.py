@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     inkstitch_bin_path: Path | None = None
     inkstitch_timeout_seconds: int = Field(default=300, ge=1)
     inkstitch_max_timeout_seconds: int = Field(default=900, ge=1)
+    inkstitch_use_xvfb: bool = False
     imagemagick_path: str = "convert"
     potrace_path: str = "potrace"
     raster_vectorize_timeout_seconds: int = Field(default=120, ge=1)
