@@ -14,6 +14,7 @@ from app.backend.models.job import OutputFormat
 logger = logging.getLogger(__name__)
 _INVALID_ARCHIVE_PREVIEW_BYTES = 2048
 _SVG_NAMESPACE = "{http://www.w3.org/2000/svg}"
+_X_DISPLAY_ERROR = "Unable to access the X Display"
 
 
 @dataclass(frozen=True)
@@ -155,16 +156,26 @@ class InkstitchAdapter:
         )
 
         try:
-            with temp_zip_path.open("wb") as zip_output:
-                completed = subprocess.run(
-                    command,
-                    stdout=zip_output,
-                    stderr=subprocess.PIPE,
-                    text=False,
-                    timeout=timeout_seconds,
-                    check=False,
-                    env=self._subprocess_env(),
-                )
+            completed = self._run_export_command(command, temp_zip_path, timeout_seconds)
+            stderr = completed.stderr.decode("utf-8", errors="replace")
+            if (
+                completed.returncode != 0
+                and not self.use_xvfb
+                and _has_x_display_error(stderr)
+            ):
+                xvfb_command = self._build_xvfb_export_execution_command(binary, input_path)
+                if xvfb_command != command:
+                    temp_zip_path.unlink(missing_ok=True)
+                    logger.info(
+                        "Retrying Ink/Stitch conversion with Xvfb after display failure",
+                        extra={"input_path": str(input_path)},
+                    )
+                    completed = self._run_export_command(
+                        xvfb_command,
+                        temp_zip_path,
+                        timeout_seconds,
+                    )
+                    stderr = completed.stderr.decode("utf-8", errors="replace")
         except subprocess.TimeoutExpired as exc:
             temp_zip_path.unlink(missing_ok=True)
             stderr = exc.stderr or b""
@@ -178,7 +189,6 @@ class InkstitchAdapter:
         except OSError as exc:
             raise InkstitchExecutionError(f"Failed to execute Ink/Stitch: {exc}") from exc
 
-        stderr = completed.stderr.decode("utf-8", errors="replace")
         if completed.returncode != 0:
             temp_zip_path.unlink(missing_ok=True)
             raise InkstitchExecutionError(
@@ -259,12 +269,39 @@ class InkstitchAdapter:
         command = self._build_zip_export_command(binary, input_path)
         if not self.use_xvfb or shutil.which("xvfb-run") is None:
             return command
+        return self._build_xvfb_export_execution_command(binary, input_path)
+
+    def _build_xvfb_export_execution_command(
+        self,
+        binary: Path,
+        input_path: Path,
+    ) -> list[str]:
+        command = self._build_zip_export_command(binary, input_path)
+        if shutil.which("xvfb-run") is None:
+            return command
         return [
             "xvfb-run",
             "--auto-servernum",
             "--server-args=-screen 0 1024x768x24",
             *command,
         ]
+
+    def _run_export_command(
+        self,
+        command: list[str],
+        temp_zip_path: Path,
+        timeout_seconds: int,
+    ) -> subprocess.CompletedProcess[bytes]:
+        with temp_zip_path.open("wb") as zip_output:
+            return subprocess.run(
+                command,
+                stdout=zip_output,
+                stderr=subprocess.PIPE,
+                text=False,
+                timeout=timeout_seconds,
+                check=False,
+                env=self._subprocess_env(),
+            )
 
     def _estimate_timeout_seconds(self, input_path: Path) -> int:
         max_timeout = max(self.timeout_seconds, self.max_timeout_seconds)
@@ -372,3 +409,7 @@ def _local_name(tag: str) -> str:
     if "}" in tag:
         return tag.rsplit("}", 1)[1]
     return tag
+
+
+def _has_x_display_error(stderr: str) -> bool:
+    return _X_DISPLAY_ERROR.lower() in stderr.lower()

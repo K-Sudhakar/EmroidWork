@@ -194,6 +194,61 @@ def test_convert_timeout_includes_configured_limit_and_cleans_temp_zip(
         raise AssertionError("Expected InkstitchExecutionError")
 
 
+def test_convert_retries_with_xvfb_after_x_display_error(tmp_path, monkeypatch):
+    binary = tmp_path / "inkstitch"
+    binary.write_text("#!/bin/sh\n", encoding="utf-8")
+    input_path = tmp_path / "input.svg"
+    input_path.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0 L1 1"/></svg>',
+        encoding="utf-8",
+    )
+    temp_zip_path = tmp_path / "output.zip"
+    commands = []
+
+    def fake_run_export_command(_self, command, zip_path, _timeout_seconds):
+        commands.append(command)
+        if len(commands) == 1:
+            return subprocess.CompletedProcess(
+                command,
+                1,
+                stderr=b"Unable to access the X Display, is $DISPLAY set properly?",
+            )
+        with zipfile.ZipFile(zip_path, "w") as archive:
+            archive.writestr("design.dst", b"dst-bytes")
+        return subprocess.CompletedProcess(command, 0, stderr=b"")
+
+    monkeypatch.setattr(inkstitch_adapter_module.os, "access", lambda _path, _mode: True)
+    monkeypatch.setattr(inkstitch_adapter_module.shutil, "which", lambda name: name)
+    monkeypatch.setattr(
+        InkstitchAdapter,
+        "_run_export_command",
+        fake_run_export_command,
+    )
+
+    adapter = InkstitchAdapter(
+        inkscape_path="python",
+        extension_path=tmp_path,
+        inkstitch_bin_path=binary,
+        timeout_seconds=300,
+        use_xvfb=False,
+    )
+
+    result = adapter.convert(
+        input_path=input_path,
+        output_path=tmp_path / "output.dst",
+        output_format=OutputFormat.DST,
+        temp_zip_path=temp_zip_path,
+    )
+
+    assert result.output_path.read_bytes() == b"dst-bytes"
+    assert commands[0][0] == str(binary)
+    assert commands[1][:3] == [
+        "xvfb-run",
+        "--auto-servernum",
+        "--server-args=-screen 0 1024x768x24",
+    ]
+
+
 def test_estimate_timeout_uses_base_for_simple_svg(tmp_path):
     input_path = tmp_path / "input.svg"
     input_path.write_text(
