@@ -1,11 +1,13 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.backend.adapters.dst_validator import DstValidator
 from app.backend.adapters.inkstitch_adapter import InkstitchAdapter
@@ -17,6 +19,7 @@ from app.backend.api.routes import router
 from app.backend.core.config import get_settings
 from app.backend.core.errors import AppError
 from app.backend.core.logging import configure_logging
+from app.backend.dashboard import router as dashboard_router
 from app.backend.services.job_service import JobService
 from app.backend.storage.job_repository import JsonJobRepository
 from app.backend.storage.local import LocalFileStorage
@@ -143,6 +146,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
+_STATIC_DIR = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_allowed_origins,
@@ -151,6 +156,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(router)
+app.include_router(dashboard_router)
 
 
 @app.exception_handler(AppError)

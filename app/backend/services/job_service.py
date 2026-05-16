@@ -46,6 +46,9 @@ class JobService:
     def get_job(self, job_id: str) -> Job:
         return self.repository.get(job_id)
 
+    def list_jobs(self) -> list[Job]:
+        return self.repository.list_all()
+
     def get_download_path(self, job_id: str) -> Path:
         job = self.repository.get(job_id)
         if job.status == JobStatus.FAILED:

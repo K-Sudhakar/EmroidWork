@@ -7,6 +7,7 @@ from app.backend.schemas.job import (
     HealthDependencyStatus,
     HealthResponse,
     JobCreateResponse,
+    JobMonitorResponse,
     JobResponse,
 )
 from app.backend.services.job_service import JobService
@@ -77,6 +78,22 @@ def get_job(
 ) -> JobResponse:
     job = service.get_job(job_id)
     return JobResponse.from_job(job)
+
+
+@router.get("/api/jobs", response_model=list[JobMonitorResponse])
+def list_jobs(
+    service: JobService = Depends(get_job_service),
+) -> list[JobMonitorResponse]:
+    return [JobMonitorResponse.from_job(job) for job in service.list_jobs()]
+
+
+@router.get("/api/jobs/{job_id}/status", response_model=JobMonitorResponse)
+def get_job_status(
+    job_id: str,
+    service: JobService = Depends(get_job_service),
+) -> JobMonitorResponse:
+    job = service.get_job(job_id)
+    return JobMonitorResponse.from_job(job)
 
 
 @router.get("/jobs/{job_id}/download")

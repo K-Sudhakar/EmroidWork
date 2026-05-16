@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.backend.adapters.inkstitch_adapter import InkstitchAdapter
 from app.backend.main import app, app_state
+from app.backend.models.job import JobStatus
 from app.backend.services.job_service import JobService
 from app.backend.storage.job_repository import JsonJobRepository
 from app.backend.storage.local import LocalFileStorage
@@ -63,6 +64,21 @@ def test_health(tmp_path):
     assert response.json()["dependencies"]["potrace"] is True
 
 
+def test_docs_still_load(tmp_path):
+    client = build_client(tmp_path)
+    response = client.get("/docs")
+    assert response.status_code == 200
+    assert "swagger-ui" in response.text.lower()
+
+
+def test_dashboard_loads(tmp_path):
+    client = build_client(tmp_path)
+    response = client.get("/dashboard")
+    assert response.status_code == 200
+    assert "Embroidery Jobs" in response.text
+    assert "/static/dashboard.js" in response.text
+
+
 def test_create_svg_job(tmp_path):
     client = build_client(tmp_path)
     response = client.post(
@@ -81,6 +97,64 @@ def test_create_svg_job(tmp_path):
     assert payload["status"] == "RECEIVED"
     assert payload["input_format"] == "svg"
     assert payload["output_format"] == "dst"
+
+
+def test_list_jobs_for_dashboard(tmp_path):
+    client = build_client(tmp_path)
+    create_response = client.post(
+        "/jobs",
+        files={
+            "file": (
+                "test.svg",
+                b'<svg xmlns="http://www.w3.org/2000/svg"/>',
+                "image/svg+xml",
+            )
+        },
+        data={"output_format": "dst"},
+    )
+    job_id = create_response.json()["job_id"]
+    repository = app_state.repository
+    assert repository is not None
+    job = repository.get(job_id)
+    output_path = tmp_path / "output" / job_id / f"{job_id}.dst"
+    repository.update(job.with_status(JobStatus.COMPLETED, output_path=output_path))
+
+    response = client.get("/api/jobs")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["job_id"] == job_id
+    assert payload[0]["name"] == "test.svg"
+    assert payload[0]["job_type"] == "svg->dst"
+    assert payload[0]["status"] == "COMPLETED"
+    assert payload[0]["progress_percent"] == 100
+    assert payload[0]["download_url"] == f"/jobs/{job_id}/download"
+
+
+def test_job_status_endpoint_for_dashboard(tmp_path):
+    client = build_client(tmp_path)
+    create_response = client.post(
+        "/jobs",
+        files={
+            "file": (
+                "test.svg",
+                b'<svg xmlns="http://www.w3.org/2000/svg"/>',
+                "image/svg+xml",
+            )
+        },
+        data={"output_format": "dst"},
+    )
+    job_id = create_response.json()["job_id"]
+
+    response = client.get(f"/api/jobs/{job_id}/status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["job_id"] == job_id
+    assert payload["status"] == "RECEIVED"
+    assert payload["progress_percent"] == 10
+    assert payload["duration_seconds"] >= 0
 
 
 def test_create_png_job(tmp_path):

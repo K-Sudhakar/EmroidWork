@@ -51,6 +51,13 @@ class JsonJobRepository:
                     jobs.append(job)
             return sorted(jobs, key=lambda job: job.created_at)
 
+    def list_all(self) -> list[Job]:
+        with self._lock:
+            if not self.jobs_dir.exists():
+                return []
+            jobs = [self._read(path) for path in self.jobs_dir.glob("*.json")]
+            return sorted(jobs, key=lambda job: job.created_at, reverse=True)
+
     def _path_for(self, job_id: str) -> Path:
         if not _JOB_ID_PATTERN.fullmatch(job_id):
             raise ValidationAppError("Job id is invalid.", code="invalid_job_id")

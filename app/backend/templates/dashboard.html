@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Embroidery Jobs Dashboard</title>
+    <link rel="stylesheet" href="/static/dashboard.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Embroidery Jobs</h1>
+        <p id="summary" class="summary">Loading jobs...</p>
+      </div>
+      <div class="actions">
+        <a class="link-button" href="/docs">API Docs</a>
+        <button id="refresh" type="button">Refresh</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="notice" class="notice" aria-live="polite">Loading job activity...</section>
+      <section class="table-shell" aria-label="Job monitor">
+        <table>
+          <thead>
+            <tr>
+              <th>Job ID</th>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Progress</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Duration</th>
+              <th>Updated</th>
+              <th>Error</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody id="jobs-body"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script src="/static/dashboard.js" defer></script>
+  </body>
+</html>
